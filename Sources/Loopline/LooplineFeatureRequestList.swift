@@ -252,23 +252,12 @@ private struct FeatureRequestRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Button(action: onVote) {
-                VStack(spacing: 3) {
-                    if isVoting {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: request.voted ? "arrow.up.circle.fill" : "arrow.up.circle")
-                    }
-                    Text("\(request.votes)")
-                        .font(.caption2.monospacedDigit())
-                }
-                .frame(width: 38)
-                .frame(minHeight: 42)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(request.voted ? Color.accentColor : .secondary)
-            .accessibilityLabel(request.voted ? "Remove vote" : "Vote")
+            FeatureRequestVoteButton(
+                votes: request.votes,
+                isVoted: request.voted,
+                isVoting: isVoting,
+                action: onVote
+            )
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -304,6 +293,46 @@ private struct FeatureRequestRow: View {
         case .completed: .green
         case nil: .secondary
         }
+    }
+}
+
+private struct FeatureRequestVoteButton: View {
+    let votes: Int
+    let isVoted: Bool
+    let isVoting: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Group {
+                    if isVoting {
+                        ProgressView()
+                            .controlSize(.regular)
+                    } else {
+                        Image(systemName: isVoted ? "arrow.up.circle.fill" : "arrow.up.circle")
+                    }
+                }
+                .font(.title3.weight(.semibold))
+                .frame(height: 24)
+
+                Text("\(votes)")
+                    .font(.callout.weight(.semibold).monospacedDigit())
+            }
+            .frame(minWidth: 52)
+            .frame(minHeight: 60)
+            .background(backgroundColor, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isVoted ? Color.accentColor : .secondary)
+        .disabled(isVoting)
+        .accessibilityLabel(isVoted ? "Remove vote" : "Vote")
+        .accessibilityValue("\(votes) votes")
+    }
+
+    private var backgroundColor: Color {
+        isVoted ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08)
     }
 }
 

@@ -7,6 +7,11 @@ import Testing
 
 @Suite("LooplineClient", .serialized)
 struct LooplineClientTests {
+    @Test("Offers only feature requests and bug reports for SDK submission")
+    func exposesAppFeedbackKinds() {
+        #expect(LooplineFeedbackKind.allCases == [.request, .bug])
+    }
+
     @Test("Submits the documented payload and idempotency key")
     func submitsFeedback() async throws {
         let recorder = RequestRecorder { request in

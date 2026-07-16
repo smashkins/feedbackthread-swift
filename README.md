@@ -61,3 +61,7 @@ struct SettingsView: View {
 ```
 
 The SDK sends a unique `Idempotency-Key` with every submission so a retried request does not create duplicate feedback.
+
+The SDK form accepts feature requests and bug reports. It does not ask users to write store reviews: Loopline will import written reviews from App Store Connect and Google Play so the developer can reply, close them, or promote useful feedback into the product workflow.
+
+Tapping a public request opens its complete description and keeps voting available from the detail screen. Public comments are not part of the current SDK/API contract; the WishKit CSV export also did not contain historical comments, so Loopline does not invent or display them.

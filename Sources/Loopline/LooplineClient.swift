@@ -4,9 +4,8 @@ import FoundationNetworking
 #endif
 
 public enum LooplineFeedbackKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case bug = "Bugs"
     case request = "Requests"
-    case review = "Reviews"
+    case bug = "Bugs"
 
     public var id: Self { self }
 
@@ -14,7 +13,6 @@ public enum LooplineFeedbackKind: String, Codable, CaseIterable, Identifiable, S
         switch self {
         case .bug: "Bug"
         case .request: "Request"
-        case .review: "Review"
         }
     }
 }

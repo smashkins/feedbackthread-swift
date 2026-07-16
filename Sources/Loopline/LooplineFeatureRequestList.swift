@@ -1,6 +1,10 @@
 #if os(iOS) && canImport(SwiftUI)
 import SwiftUI
 
+private enum FeatureRequestRoute: Hashable {
+    case detail(String)
+}
+
 public struct LooplineFeatureRequestList: View {
     private enum LoadState: Equatable {
         case loading
@@ -73,6 +77,7 @@ public struct LooplineFeatureRequestList: View {
             content
                 .navigationTitle("Feature requests")
                 .navigationBarTitleDisplayMode(.inline)
+                .navigationDestination(for: FeatureRequestRoute.self, destination: requestDestination)
                 .toolbar {
                     ToolbarTitleMenu {
                         ForEach(RequestFilter.allCases) { filter in
@@ -164,6 +169,26 @@ public struct LooplineFeatureRequestList: View {
 
     private func requestCount(for filter: RequestFilter) -> Int {
         requests.count { filter.includes($0.status) }
+    }
+
+    @ViewBuilder
+    private func requestDestination(_ route: FeatureRequestRoute) -> some View {
+        switch route {
+        case .detail(let requestID):
+            if let request = requests.first(where: { $0.id == requestID }) {
+                FeatureRequestDetail(
+                    request: request,
+                    isVoting: votingIDs.contains(request.id),
+                    onVote: { toggleVote(request) }
+                )
+            } else {
+                FeatureRequestMessage(
+                    title: "Request unavailable",
+                    message: "This request is no longer available on the public board.",
+                    systemImage: "rectangle.slash"
+                )
+            }
+        }
     }
 
     private func ensureVoterID() {
@@ -259,34 +284,90 @@ private struct FeatureRequestRow: View {
                 action: onVote
             )
 
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(request.title)
-                        .font(.headline)
-                    if request.target == .watchOS {
-                        Text("Apple Watch")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.blue)
+            NavigationLink(value: FeatureRequestRoute.detail(request.id)) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(request.title)
+                            .font(.headline)
+                        if request.target == .watchOS {
+                            Text("Apple Watch")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.blue)
+                        }
                     }
+                    Text(request.description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                    FeatureRequestStatusBadge(status: request.status)
                 }
-                Text(request.description)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                Text(request.status.publicRequestLabel)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(statusColor)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(statusColor.opacity(0.12), in: Capsule())
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.plain)
         }
         .contentShape(Rectangle())
     }
+}
 
-    private var statusColor: Color {
-        switch request.status.publicRequestStage {
+private struct FeatureRequestDetail: View {
+    let request: LooplineFeatureRequest
+    let isVoting: Bool
+    let onVote: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text(request.title)
+                    .font(.title2.bold())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 12) {
+                    FeatureRequestVoteButton(
+                        votes: request.votes,
+                        isVoted: request.voted,
+                        isVoting: isVoting,
+                        action: onVote
+                    )
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        FeatureRequestStatusBadge(status: request.status)
+                        if request.target == .watchOS {
+                            Label("Apple Watch", systemImage: "applewatch")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Divider()
+
+                Text(request.description)
+                    .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .padding(20)
+        }
+        .navigationTitle("Request")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct FeatureRequestStatusBadge: View {
+    let status: String
+
+    var body: some View {
+        Text(status.publicRequestLabel)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.12), in: Capsule())
+    }
+
+    private var color: Color {
+        switch status.publicRequestStage {
         case .inReview: .cyan
         case .planned: .purple
         case .inProgress: .blue

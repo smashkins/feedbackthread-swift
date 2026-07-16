@@ -65,6 +65,30 @@ public struct LooplineFeedback: Decodable, Equatable, Sendable {
     public let updatedAt: String
 }
 
+public enum LooplineRequestTarget: String, Codable, Sendable {
+    case ios
+    case android
+    case watchOS = "watchos"
+
+    public var title: String? {
+        switch self {
+        case .watchOS: "Apple Watch"
+        case .ios, .android: nil
+        }
+    }
+}
+
+public struct LooplineFeatureRequest: Decodable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let description: String
+    public let votes: Int
+    public let target: LooplineRequestTarget
+    public let status: String
+    public let voted: Bool
+    public let updatedAt: String
+}
+
 public struct LooplineConfiguration: Equatable, Sendable {
     public var baseURL: URL
     public var projectKey: String
@@ -96,8 +120,16 @@ public struct LooplineClient: Sendable {
         _ submission: LooplineFeedbackSubmission,
         _ idempotencyKey: String
     ) async throws -> LooplineFeedback
+    public typealias RequestListHandler = @Sendable (_ externalUserID: String?) async throws -> [LooplineFeatureRequest]
+    public typealias VoteHandler = @Sendable (
+        _ requestID: String,
+        _ voted: Bool,
+        _ externalUserID: String
+    ) async throws -> LooplineVoteResult
 
     private let submissionHandler: SubmissionHandler
+    private let requestListHandler: RequestListHandler
+    private let voteHandler: VoteHandler
 
     public init(
         configuration: LooplineConfiguration,
@@ -107,10 +139,30 @@ public struct LooplineClient: Sendable {
         submissionHandler = { submission, idempotencyKey in
             try await transport.submit(submission, idempotencyKey: idempotencyKey)
         }
+        requestListHandler = { externalUserID in
+            try await transport.requests(externalUserID: externalUserID)
+        }
+        voteHandler = { requestID, voted, externalUserID in
+            try await transport.setVote(for: requestID, voted: voted, externalUserID: externalUserID)
+        }
     }
 
     public init(submit: @escaping SubmissionHandler) {
         submissionHandler = submit
+        requestListHandler = { _ in [] }
+        voteHandler = { _, _, _ in
+            throw LooplineError.invalidConfiguration("This Loopline client does not support voting.")
+        }
+    }
+
+    public init(
+        submit: @escaping SubmissionHandler,
+        requests: @escaping RequestListHandler,
+        setVote: @escaping VoteHandler
+    ) {
+        submissionHandler = submit
+        requestListHandler = requests
+        voteHandler = setVote
     }
 
     @discardableResult
@@ -120,6 +172,25 @@ public struct LooplineClient: Sendable {
     ) async throws -> LooplineFeedback {
         try await submissionHandler(submission, idempotencyKey)
     }
+
+    public func requests(externalUserID: String? = nil) async throws -> [LooplineFeatureRequest] {
+        try await requestListHandler(externalUserID)
+    }
+
+    @discardableResult
+    public func setVote(
+        for requestID: String,
+        voted: Bool,
+        externalUserID: String
+    ) async throws -> LooplineVoteResult {
+        try await voteHandler(requestID, voted, externalUserID)
+    }
+}
+
+public struct LooplineVoteResult: Decodable, Equatable, Sendable {
+    public let feedbackId: String
+    public let votes: Int
+    public let voted: Bool
 }
 
 private final class LooplineHTTPTransport: @unchecked Sendable {
@@ -176,6 +247,93 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
         }
         return envelope.feedback
     }
+
+    func requests(externalUserID: String?) async throws -> [LooplineFeatureRequest] {
+        var components = URLComponents(
+            url: try projectEndpoint().appendingPathComponent("requests"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [URLQueryItem(name: "platform", value: "ios")]
+        guard let endpoint = components?.url else {
+            throw LooplineError.invalidConfiguration("The Loopline base URL is invalid.")
+        }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let externalUserID = normalizedUserID(externalUserID) {
+            request.setValue(externalUserID, forHTTPHeaderField: "X-Loopline-User")
+        }
+
+        let data = try await responseData(for: request)
+        guard let envelope = try? decoder.decode(LooplineRequestsEnvelope.self, from: data) else {
+            throw LooplineError.invalidResponse
+        }
+        return envelope.requests
+    }
+
+    func setVote(
+        for requestID: String,
+        voted: Bool,
+        externalUserID: String
+    ) async throws -> LooplineVoteResult {
+        guard let userID = normalizedUserID(externalUserID) else {
+            throw LooplineError.invalidConfiguration("A stable user ID is required for voting.")
+        }
+        var components = URLComponents(
+            url: try projectEndpoint()
+                .appendingPathComponent("requests")
+                .appendingPathComponent(requestID)
+                .appendingPathComponent("vote"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [URLQueryItem(name: "platform", value: "ios")]
+        guard let endpoint = components?.url else {
+            throw LooplineError.invalidConfiguration("The Loopline base URL is invalid.")
+        }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = voted ? "POST" : "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(userID, forHTTPHeaderField: "X-Loopline-User")
+
+        let data = try await responseData(for: request)
+        guard let result = try? decoder.decode(LooplineVoteResult.self, from: data) else {
+            throw LooplineError.invalidResponse
+        }
+        return result
+    }
+
+    private func projectEndpoint() throws -> URL {
+        let projectKey = configuration.projectKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !projectKey.isEmpty else {
+            throw LooplineError.invalidConfiguration("A Loopline project key is required.")
+        }
+        return configuration.baseURL
+            .appendingPathComponent("v1")
+            .appendingPathComponent("projects")
+            .appendingPathComponent(projectKey)
+    }
+
+    private func normalizedUserID(_ value: String?) -> String? {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private func responseData(for request: URLRequest) async throws -> Data {
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LooplineError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let error = try? decoder.decode(LooplineErrorEnvelope.self, from: data)
+            throw LooplineError.server(
+                statusCode: httpResponse.statusCode,
+                message: error?.error.message ?? "Loopline returned HTTP \(httpResponse.statusCode)."
+            )
+        }
+        return data
+    }
 }
 
 private struct LooplineIngestionPayload: Encodable {
@@ -207,6 +365,10 @@ private struct LooplineIngestionPayload: Encodable {
 
 private struct LooplineFeedbackEnvelope: Decodable {
     let feedback: LooplineFeedback
+}
+
+private struct LooplineRequestsEnvelope: Decodable {
+    let requests: [LooplineFeatureRequest]
 }
 
 private struct LooplineErrorEnvelope: Decodable {

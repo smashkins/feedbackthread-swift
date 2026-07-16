@@ -1,6 +1,6 @@
 # Loopline Swift SDK
 
-This package provides the first app-side test integration for iOS 16+ and macOS 13+. It includes a small async client on both platforms plus a native feedback form on iOS.
+This package provides the first app-side test integration for iOS 16+ and macOS 13+. It includes a small async client on both platforms plus a native feedback form and feature-request list on iOS. There is intentionally no Watch app UI.
 
 ## Add the package
 
@@ -20,7 +20,20 @@ let loopline = LooplineClient(
 )
 ```
 
-Treat the project key as an app ingestion credential, not an administrator credential. It can create feedback only; it cannot read the workspace or change feedback.
+Treat the project key as an app credential, not an administrator credential. It can submit feedback, read the moderated public request feed, and vote. It cannot read the private workspace or perform developer mutations.
+
+## Present the feature-request list
+
+```swift
+LooplineFeatureRequestList(
+    client: loopline,
+    appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+    externalUserID: signedInUserID,
+    onDismiss: { isShowingRequests = false }
+)
+```
+
+The list automatically requests the iOS audience. It includes iOS requests and Apple Watch-specific requests; only Watch-specific rows receive an **Apple Watch** label. If the app has no account ID, the view stores a random anonymous voter ID locally.
 
 ## Present the feedback form
 

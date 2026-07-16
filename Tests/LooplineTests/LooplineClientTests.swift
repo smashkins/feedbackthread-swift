@@ -90,6 +90,95 @@ struct LooplineClientTests {
         }
     }
 
+    @Test("Loads the iOS request feed and includes the voter identity")
+    func loadsRequests() async throws {
+        let recorder = RequestRecorder { request in
+            #expect(request.httpMethod == "GET")
+            #expect(request.url?.absoluteString == "https://example.com/v1/projects/project-key/requests?platform=ios")
+            #expect(request.value(forHTTPHeaderField: "X-Loopline-User") == "user-123")
+            return try response(
+                statusCode: 200,
+                json: ["requests": [sampleRequest()]]
+            )
+        }
+        let client = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        let requests = try await client.requests(externalUserID: "user-123")
+        let request = try #require(requests.first)
+        #expect(request.id == "FDBK-request")
+        #expect(request.target == .watchOS)
+        #expect(request.status == "Planned")
+        #expect(request.voted)
+    }
+
+    @Test("Votes and removes votes using the iOS platform context")
+    func changesVote() async throws {
+        let voteRecorder = RequestRecorder { request in
+            #expect(request.httpMethod == "POST")
+            #expect(request.url?.absoluteString == "https://example.com/v1/projects/project-key/requests/FDBK-request/vote?platform=ios")
+            #expect(request.value(forHTTPHeaderField: "X-Loopline-User") == "user-123")
+            return try response(
+                statusCode: 200,
+                json: [
+                    "feedbackId": "FDBK-request",
+                    "votes": 13,
+                    "voted": true,
+                ]
+            )
+        }
+        let voteClient = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: voteRecorder.session
+        )
+
+        let voted = try await voteClient.setVote(
+            for: "FDBK-request",
+            voted: true,
+            externalUserID: "user-123"
+        )
+        #expect(voted.voted)
+        #expect(voted.votes == 13)
+
+        let removeRecorder = RequestRecorder { request in
+            #expect(request.httpMethod == "DELETE")
+            #expect(request.url?.absoluteString == "https://example.com/v1/projects/project-key/requests/FDBK-request/vote?platform=ios")
+            return try response(
+                statusCode: 200,
+                json: [
+                    "feedbackId": "FDBK-request",
+                    "votes": 12,
+                    "voted": false,
+                ]
+            )
+        }
+        let removeClient = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: removeRecorder.session
+        )
+        let removed = try await removeClient.setVote(
+            for: "FDBK-request",
+            voted: false,
+            externalUserID: "user-123"
+        )
+        #expect(!removed.voted)
+        #expect(removed.votes == 12)
+    }
+
     @Test("Rejects an empty project key before sending")
     func rejectsEmptyProjectKey() async throws {
         let recorder = RequestRecorder { _ in
@@ -147,6 +236,9 @@ struct LooplineClientTests {
         #expect(feedback.source == "ios")
         #expect(feedback.title == "Swift SDK live integration test")
         #expect(feedback.status == "Open")
+
+        let requests = try await client.requests(externalUserID: "swift-live-reader")
+        #expect(!requests.isEmpty)
     }
 }
 
@@ -202,6 +294,19 @@ private func sampleFeedback() -> [String: Any] {
         "responseDraft": "",
         "responseState": "Not started",
         "createdAt": "2026-07-16T12:00:00.000Z",
+        "updatedAt": "2026-07-16T12:00:00.000Z",
+    ]
+}
+
+private func sampleRequest() -> [String: Any] {
+    [
+        "id": "FDBK-request",
+        "title": "Training complications",
+        "description": "Show the next practice on my watch face.",
+        "votes": 12,
+        "target": "watchos",
+        "status": "Planned",
+        "voted": true,
         "updatedAt": "2026-07-16T12:00:00.000Z",
     ]
 }

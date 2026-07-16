@@ -14,6 +14,36 @@ public struct LooplineFeatureRequestList: View {
         var id: String { rawValue }
     }
 
+    private enum RequestFilter: String, CaseIterable, Identifiable {
+        case all
+        case inReview
+        case planned
+        case inProgress
+        case completed
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .all: "All"
+            case .inReview: "In review"
+            case .planned: "Planned"
+            case .inProgress: "In progress"
+            case .completed: "Completed"
+            }
+        }
+
+        func includes(_ status: String) -> Bool {
+            switch self {
+            case .all: status.publicRequestStage != nil
+            case .inReview: status.publicRequestStage == .inReview
+            case .planned: status.publicRequestStage == .planned
+            case .inProgress: status.publicRequestStage == .inProgress
+            case .completed: status.publicRequestStage == .completed
+            }
+        }
+    }
+
     private let client: LooplineClient
     private let appVersion: String?
     private let externalUserID: String?
@@ -24,6 +54,7 @@ public struct LooplineFeatureRequestList: View {
     @State private var loadState: LoadState = .loading
     @State private var votingIDs: Set<String> = []
     @State private var activeSheet: ActiveSheet?
+    @State private var selectedFilter: RequestFilter = .all
 
     public init(
         client: LooplineClient,
@@ -43,6 +74,18 @@ public struct LooplineFeatureRequestList: View {
                 .navigationTitle("Feature requests")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarTitleMenu {
+                        ForEach(RequestFilter.allCases) { filter in
+                            Button {
+                                selectedFilter = filter
+                            } label: {
+                                Label(
+                                    "\(filter.title) (\(requestCount(for: filter)))",
+                                    systemImage: selectedFilter == filter ? "checkmark" : "circle"
+                                )
+                            }
+                        }
+                    }
                     if let onDismiss {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Done", action: onDismiss)
@@ -88,7 +131,7 @@ public struct LooplineFeatureRequestList: View {
                 action: { Task { await load() } }
             )
         default:
-            List(requests) { request in
+            List(filteredRequests) { request in
                 FeatureRequestRow(
                     request: request,
                     isVoting: votingIDs.contains(request.id),
@@ -98,11 +141,11 @@ public struct LooplineFeatureRequestList: View {
             }
             .listStyle(.plain)
             .overlay {
-                if requests.isEmpty {
+                if filteredRequests.isEmpty {
                     FeatureRequestMessage(
-                        title: "No feature requests yet",
-                        message: "Be the first to share an idea.",
-                        systemImage: "lightbulb"
+                        title: requests.isEmpty ? "No feature requests yet" : "No \(selectedFilter.title.lowercased()) requests",
+                        message: requests.isEmpty ? "Be the first to share an idea." : "Choose another status to see more requests.",
+                        systemImage: requests.isEmpty ? "lightbulb" : "line.3.horizontal.decrease.circle"
                     )
                 }
             }
@@ -113,6 +156,14 @@ public struct LooplineFeatureRequestList: View {
     private var voterID: String {
         let provided = externalUserID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return provided.isEmpty ? storedVoterID : provided
+    }
+
+    private var filteredRequests: [LooplineFeatureRequest] {
+        requests.filter { selectedFilter.includes($0.status) }
+    }
+
+    private func requestCount(for filter: RequestFilter) -> Int {
+        requests.count { filter.includes($0.status) }
     }
 
     private func ensureVoterID() {
@@ -233,9 +284,12 @@ private struct FeatureRequestRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
-                Text(request.status)
+                Text(request.status.publicRequestLabel)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(statusColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(statusColor.opacity(0.12), in: Capsule())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -243,10 +297,41 @@ private struct FeatureRequestRow: View {
     }
 
     private var statusColor: Color {
-        switch request.status {
-        case "Released", "Closed": .green
-        case "In progress", "Ready to release": .blue
-        default: .secondary
+        switch request.status.publicRequestStage {
+        case .inReview: .cyan
+        case .planned: .purple
+        case .inProgress: .blue
+        case .completed: .green
+        case nil: .secondary
+        }
+    }
+}
+
+private enum PublicRequestStage {
+    case inReview
+    case planned
+    case inProgress
+    case completed
+}
+
+private extension String {
+    var publicRequestStage: PublicRequestStage? {
+        switch self {
+        case "Under review": .inReview
+        case "Planned": .planned
+        case "In progress", "Ready to release": .inProgress
+        case "Released": .completed
+        default: nil
+        }
+    }
+
+    var publicRequestLabel: String {
+        switch publicRequestStage {
+        case .inReview: "In review"
+        case .planned: "Planned"
+        case .inProgress: "In progress"
+        case .completed: "Completed"
+        case nil: self
         }
     }
 }
@@ -300,6 +385,16 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
             status: "Planned",
             voted: false,
             updatedAt: "2026-07-15T12:00:00.000Z"
+        ),
+        LooplineFeatureRequest(
+            id: "FDBK-3",
+            title: "Health integration",
+            description: "Include completed breathing sessions in Health.",
+            votes: 9,
+            target: .ios,
+            status: "Released",
+            voted: false,
+            updatedAt: "2026-07-14T12:00:00.000Z"
         ),
     ]
 }

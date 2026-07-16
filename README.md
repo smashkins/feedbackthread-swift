@@ -33,6 +33,8 @@ LooplineFeatureRequestList(
 )
 ```
 
+The list is moderated: Open and Rejected requests stay in the developer dashboard. App users can filter approved requests by In review, Planned, In progress, and Completed. Submitted requests appear only after approval.
+
 The list automatically requests the iOS audience. It includes iOS requests and Apple Watch-specific requests; only Watch-specific rows receive an **Apple Watch** label. If the app has no account ID, the view stores a random anonymous voter ID locally.
 
 ## Present the feedback form

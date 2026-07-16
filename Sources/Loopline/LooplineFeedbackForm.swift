@@ -69,7 +69,10 @@ public struct LooplineFeedbackForm: View {
 
                 if phase == .sent {
                     Section {
-                        Label("Feedback sent. Thank you!", systemImage: "checkmark.circle.fill")
+                        Label(
+                            kind == .request ? "Request submitted for review." : "Feedback sent. Thank you!",
+                            systemImage: "checkmark.circle.fill"
+                        )
                             .foregroundStyle(.green)
 
                         Button("Done") { dismiss() }

@@ -3,13 +3,13 @@ import Foundation
 import FoundationNetworking
 #endif
 import Testing
-@testable import Loopline
+@testable import FeedbackThread
 
-@Suite("LooplineClient", .serialized)
+@Suite("FeedbackThreadClient", .serialized)
 struct LooplineClientTests {
     @Test("Offers only feature requests and bug reports for SDK submission")
     func exposesAppFeedbackKinds() {
-        #expect(LooplineFeedbackKind.allCases == [.request, .bug])
+        #expect(FeedbackThreadFeedbackKind.allCases == [.request, .bug])
     }
 
     @Test("Submits the documented payload and idempotency key")
@@ -100,7 +100,7 @@ struct LooplineClientTests {
         let recorder = RequestRecorder { request in
             #expect(request.httpMethod == "GET")
             #expect(request.url?.absoluteString == "https://example.com/v1/projects/project-key/requests?platform=ios")
-            #expect(request.value(forHTTPHeaderField: "X-Loopline-User") == "user-123")
+            #expect(request.value(forHTTPHeaderField: "X-FeedbackThread-User") == "user-123")
             return try response(
                 statusCode: 200,
                 json: ["requests": [sampleRequest()]]
@@ -128,7 +128,7 @@ struct LooplineClientTests {
         let voteRecorder = RequestRecorder { request in
             #expect(request.httpMethod == "POST")
             #expect(request.url?.absoluteString == "https://example.com/v1/projects/project-key/requests/FDBK-request/vote?platform=ios")
-            #expect(request.value(forHTTPHeaderField: "X-Loopline-User") == "user-123")
+            #expect(request.value(forHTTPHeaderField: "X-FeedbackThread-User") == "user-123")
             return try response(
                 statusCode: 200,
                 json: [
@@ -205,7 +205,7 @@ struct LooplineClientTests {
             )
             Issue.record("Expected an invalid configuration error")
         } catch let error as LooplineError {
-            #expect(error == .invalidConfiguration("A Loopline project key is required."))
+            #expect(error == .invalidConfiguration("A FeedbackThread project key is required."))
         }
     }
 
@@ -213,9 +213,9 @@ struct LooplineClientTests {
     func liveSubmission() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard
-            let baseURLString = environment["LOOPLINE_LIVE_BASE_URL"],
+            let baseURLString = environment["FEEDBACKTHREAD_LIVE_BASE_URL"] ?? environment["LOOPLINE_LIVE_BASE_URL"],
             let baseURL = URL(string: baseURLString),
-            let projectKey = environment["LOOPLINE_LIVE_PROJECT_KEY"]
+            let projectKey = environment["FEEDBACKTHREAD_LIVE_PROJECT_KEY"] ?? environment["LOOPLINE_LIVE_PROJECT_KEY"]
         else {
             return
         }

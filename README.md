@@ -1,32 +1,44 @@
-# Loopline Swift SDK
+# FeedbackThread Swift SDK
 
 This package provides the first app-side test integration for iOS 16+ and macOS 13+. It includes a small async client on both platforms plus a native feedback form and feature-request list on iOS. There is intentionally no Watch app UI.
 
 ## Add the package
 
-For local private-alpha testing, add `/Users/aivarsmeijers/Developer/Loopline` as a local package in Xcode and select the `Loopline` product. The package manifest lives at the repository root, so the GitHub URL can be used after this branch is merged or tagged.
+GitHub plus Swift Package Manager is the standard low-friction distribution path for an iOS SDK. In Xcode, choose **File → Add Package Dependencies…** and enter:
+
+```text
+https://github.com/aivars/loopline.git
+```
+
+Select the `FeedbackThread` library product. During the closed beta, use the current beta branch or an exact beta tag supplied with the tester invitation. Once `0.1.0` exists, use **Up to Next Major Version** starting at `0.1.0`. Do not use an unbounded `main` dependency in a released app.
+
+For local development, choose **File → Add Package Dependencies… → Add Local…**, select this repository root, and select the `FeedbackThread` product. The deprecated `Loopline` product remains temporarily available for source compatibility.
+
+The repository is not tagged or published by this document change; creating the first beta tag is a separate release action.
 
 ## Configure the client
 
 ```swift
-import Loopline
+import FeedbackThread
 
-let loopline = LooplineClient(
-    configuration: LooplineConfiguration(
-        baseURL: URL(string: "https://loopline-staging.aivars-meijers.workers.dev")!,
+let feedbackThread = FeedbackThreadClient(
+    configuration: FeedbackThreadConfiguration(
+        baseURL: URL(string: "https://api.feedbackthread.com")!,
         projectKey: "your-project-key",
         source: "ios"
     )
 )
 ```
 
-Treat the project key as an app credential, not an administrator credential. It can submit feedback, read the moderated public request feed, and vote. It cannot read the private workspace or perform developer mutations.
+Copy the project key from **SDK setup** in the signed-in dashboard. Treat it as a public project identifier: any value shipped in an app can be extracted. It can submit feedback, read the moderated public request feed, and vote. It cannot read the private workspace, call MCP, access store credentials, or perform developer mutations.
+
+Create one shared client near your app root and inject it into the settings or support flow that presents FeedbackThread UI. Do not create a new client for every render.
 
 ## Present the feature-request list
 
 ```swift
-LooplineFeatureRequestList(
-    client: loopline,
+FeedbackThreadFeatureRequestList(
+    client: feedbackThread,
     appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
     externalUserID: signedInUserID,
     onDismiss: { isShowingRequests = false }
@@ -40,7 +52,7 @@ The list automatically requests the iOS audience. It includes iOS requests and A
 ## Present the feedback form
 
 ```swift
-import Loopline
+import FeedbackThread
 import SwiftUI
 
 struct SettingsView: View {
@@ -51,8 +63,8 @@ struct SettingsView: View {
             isShowingFeedback = true
         }
         .sheet(isPresented: $isShowingFeedback) {
-            LooplineFeedbackForm(
-                client: loopline,
+            FeedbackThreadFeedbackForm(
+                client: feedbackThread,
                 appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
             )
         }
@@ -62,6 +74,15 @@ struct SettingsView: View {
 
 The SDK sends a unique `Idempotency-Key` with every submission so a retried request does not create duplicate feedback.
 
-The SDK form accepts feature requests and bug reports. It does not ask users to write store reviews: Loopline will import written reviews from App Store Connect and Google Play so the developer can reply, close them, or promote useful feedback into the product workflow.
+The SDK form accepts feature requests and bug reports. It does not ask users to write store reviews: FeedbackThread will import written reviews from App Store Connect and Google Play so the developer can reply, close them, or promote useful feedback into the product workflow.
 
-Tapping a public request opens its complete description and keeps voting available from the detail screen. Public comments are not part of the current SDK/API contract; the WishKit CSV export also did not contain historical comments, so Loopline does not invent or display them.
+Tapping a public request opens its complete description and keeps voting available from the detail screen. Public comments are not part of the current SDK/API contract; the WishKit CSV export also did not contain historical comments, so FeedbackThread does not invent or display them.
+
+## Verify the integration
+
+1. Run the app and open the feature-request list. Only developer-moderated iOS and Apple Watch requests should appear.
+2. Submit a test feature request or bug report.
+3. Sign in at `https://app.feedbackthread.com` and confirm that the item appears in the correct project inbox.
+4. Retry the same queued submission and confirm that the idempotency key prevents a duplicate.
+
+If the project is on the free plan after five collected items, collection still succeeds but the new content stays locked in the dashboard, API, exports, and MCP until the project is upgraded.

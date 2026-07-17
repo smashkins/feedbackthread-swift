@@ -107,7 +107,7 @@ public enum LooplineError: Error, Equatable, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .invalidConfiguration(let message): message
-        case .invalidResponse: "Loopline returned an unreadable response."
+        case .invalidResponse: "FeedbackThread returned an unreadable response."
         case .server(_, let message): message
         }
     }
@@ -149,7 +149,7 @@ public struct LooplineClient: Sendable {
         submissionHandler = submit
         requestListHandler = { _ in [] }
         voteHandler = { _, _, _ in
-            throw LooplineError.invalidConfiguration("This Loopline client does not support voting.")
+            throw LooplineError.invalidConfiguration("This FeedbackThread client does not support voting.")
         }
     }
 
@@ -209,10 +209,10 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
         let projectKey = configuration.projectKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let source = configuration.source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !projectKey.isEmpty else {
-            throw LooplineError.invalidConfiguration("A Loopline project key is required.")
+            throw LooplineError.invalidConfiguration("A FeedbackThread project key is required.")
         }
         guard !source.isEmpty else {
-            throw LooplineError.invalidConfiguration("A Loopline source is required.")
+            throw LooplineError.invalidConfiguration("A FeedbackThread source is required.")
         }
 
         let endpoint = configuration.baseURL
@@ -236,7 +236,7 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
             let error = try? decoder.decode(LooplineErrorEnvelope.self, from: data)
             throw LooplineError.server(
                 statusCode: httpResponse.statusCode,
-                message: error?.error.message ?? "Loopline returned HTTP \(httpResponse.statusCode)."
+                message: error?.error.message ?? "FeedbackThread returned HTTP \(httpResponse.statusCode)."
             )
         }
 
@@ -253,14 +253,14 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
         )
         components?.queryItems = [URLQueryItem(name: "platform", value: "ios")]
         guard let endpoint = components?.url else {
-            throw LooplineError.invalidConfiguration("The Loopline base URL is invalid.")
+            throw LooplineError.invalidConfiguration("The FeedbackThread base URL is invalid.")
         }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let externalUserID = normalizedUserID(externalUserID) {
-            request.setValue(externalUserID, forHTTPHeaderField: "X-Loopline-User")
+            request.setValue(externalUserID, forHTTPHeaderField: "X-FeedbackThread-User")
         }
 
         let data = try await responseData(for: request)
@@ -287,13 +287,13 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
         )
         components?.queryItems = [URLQueryItem(name: "platform", value: "ios")]
         guard let endpoint = components?.url else {
-            throw LooplineError.invalidConfiguration("The Loopline base URL is invalid.")
+            throw LooplineError.invalidConfiguration("The FeedbackThread base URL is invalid.")
         }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = voted ? "POST" : "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(userID, forHTTPHeaderField: "X-Loopline-User")
+        request.setValue(userID, forHTTPHeaderField: "X-FeedbackThread-User")
 
         let data = try await responseData(for: request)
         guard let result = try? decoder.decode(LooplineVoteResult.self, from: data) else {
@@ -305,7 +305,7 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
     private func projectEndpoint() throws -> URL {
         let projectKey = configuration.projectKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !projectKey.isEmpty else {
-            throw LooplineError.invalidConfiguration("A Loopline project key is required.")
+            throw LooplineError.invalidConfiguration("A FeedbackThread project key is required.")
         }
         return configuration.baseURL
             .appendingPathComponent("v1")
@@ -327,7 +327,7 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
             let error = try? decoder.decode(LooplineErrorEnvelope.self, from: data)
             throw LooplineError.server(
                 statusCode: httpResponse.statusCode,
-                message: error?.error.message ?? "Loopline returned HTTP \(httpResponse.statusCode)."
+                message: error?.error.message ?? "FeedbackThread returned HTTP \(httpResponse.statusCode)."
             )
         }
         return data

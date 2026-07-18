@@ -17,25 +17,53 @@ public enum LooplineFeedbackKind: String, Codable, CaseIterable, Identifiable, S
     }
 }
 
+/// A customer's plan tier, used to prioritize feedback and votes.
+///
+/// Pass the same signal you trust for your own paywall — whatever your app already
+/// uses to distinguish free users from paying customers.
+public enum LooplineCustomerTier: Sendable, Equatable {
+    case free
+    case paying
+    case custom(String)
+
+    public var rawValue: String {
+        switch self {
+        case .free: "free"
+        case .paying: "paying"
+        case .custom(let value): value
+        }
+    }
+}
+
+extension LooplineCustomerTier: Encodable {
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
 public struct LooplineFeedbackSubmission: Encodable, Equatable, Sendable {
     public var kind: LooplineFeedbackKind
     public var title: String
     public var text: String
     public var appVersion: String?
     public var externalUserID: String?
+    public var customerTier: LooplineCustomerTier?
 
     public init(
         kind: LooplineFeedbackKind,
         title: String,
         text: String,
         appVersion: String? = nil,
-        externalUserID: String? = nil
+        externalUserID: String? = nil,
+        customerTier: LooplineCustomerTier? = nil
     ) {
         self.kind = kind
         self.title = title
         self.text = text
         self.appVersion = appVersion
         self.externalUserID = externalUserID
+        self.customerTier = customerTier
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -44,6 +72,7 @@ public struct LooplineFeedbackSubmission: Encodable, Equatable, Sendable {
         case text
         case appVersion
         case externalUserID = "externalUserId"
+        case customerTier
     }
 }
 
@@ -85,6 +114,7 @@ public struct LooplineFeatureRequest: Decodable, Equatable, Identifiable, Sendab
     public let status: String
     public let voted: Bool
     public let updatedAt: String
+    public let shippedInVersion: String?
 }
 
 public struct LooplineConfiguration: Equatable, Sendable {
@@ -122,7 +152,8 @@ public struct LooplineClient: Sendable {
     public typealias VoteHandler = @Sendable (
         _ requestID: String,
         _ voted: Bool,
-        _ externalUserID: String
+        _ externalUserID: String,
+        _ customerTier: LooplineCustomerTier?
     ) async throws -> LooplineVoteResult
 
     private let submissionHandler: SubmissionHandler
@@ -140,15 +171,20 @@ public struct LooplineClient: Sendable {
         requestListHandler = { externalUserID in
             try await transport.requests(externalUserID: externalUserID)
         }
-        voteHandler = { requestID, voted, externalUserID in
-            try await transport.setVote(for: requestID, voted: voted, externalUserID: externalUserID)
+        voteHandler = { requestID, voted, externalUserID, customerTier in
+            try await transport.setVote(
+                for: requestID,
+                voted: voted,
+                externalUserID: externalUserID,
+                customerTier: customerTier
+            )
         }
     }
 
     public init(submit: @escaping SubmissionHandler) {
         submissionHandler = submit
         requestListHandler = { _ in [] }
-        voteHandler = { _, _, _ in
+        voteHandler = { _, _, _, _ in
             throw LooplineError.invalidConfiguration("This FeedbackThread client does not support voting.")
         }
     }
@@ -179,9 +215,10 @@ public struct LooplineClient: Sendable {
     public func setVote(
         for requestID: String,
         voted: Bool,
-        externalUserID: String
+        externalUserID: String,
+        customerTier: LooplineCustomerTier? = nil
     ) async throws -> LooplineVoteResult {
-        try await voteHandler(requestID, voted, externalUserID)
+        try await voteHandler(requestID, voted, externalUserID, customerTier)
     }
 }
 
@@ -273,7 +310,8 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
     func setVote(
         for requestID: String,
         voted: Bool,
-        externalUserID: String
+        externalUserID: String,
+        customerTier: LooplineCustomerTier? = nil
     ) async throws -> LooplineVoteResult {
         guard let userID = normalizedUserID(externalUserID) else {
             throw LooplineError.invalidConfiguration("A stable user ID is required for voting.")
@@ -294,6 +332,10 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
         request.httpMethod = voted ? "POST" : "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(userID, forHTTPHeaderField: "X-FeedbackThread-User")
+        if let customerTier {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try encoder.encode(LooplineVotePayload(customerTier: customerTier))
+        }
 
         let data = try await responseData(for: request)
         guard let result = try? decoder.decode(LooplineVoteResult.self, from: data) else {
@@ -341,6 +383,7 @@ private struct LooplineIngestionPayload: Encodable {
     let text: String
     let appVersion: String?
     let externalUserID: String?
+    let customerTier: LooplineCustomerTier?
 
     init(submission: LooplineFeedbackSubmission, source: String) {
         kind = submission.kind
@@ -349,6 +392,7 @@ private struct LooplineIngestionPayload: Encodable {
         text = submission.text
         appVersion = submission.appVersion
         externalUserID = submission.externalUserID
+        customerTier = submission.customerTier
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -358,7 +402,12 @@ private struct LooplineIngestionPayload: Encodable {
         case text
         case appVersion
         case externalUserID = "externalUserId"
+        case customerTier
     }
+}
+
+private struct LooplineVotePayload: Encodable {
+    let customerTier: LooplineCustomerTier
 }
 
 private struct LooplineFeedbackEnvelope: Decodable {

@@ -233,7 +233,8 @@ public struct LooplineFeatureRequestList: View {
                     target: current.target,
                     status: current.status,
                     voted: result.voted,
-                    updatedAt: current.updatedAt
+                    updatedAt: current.updatedAt,
+                    shippedInVersion: current.shippedInVersion
                 )
             } catch {
                 loadState = .failed(error.localizedDescription)
@@ -299,7 +300,12 @@ private struct FeatureRequestRow: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
-                    FeatureRequestStatusBadge(status: request.status)
+                    HStack(spacing: 6) {
+                        FeatureRequestStatusBadge(status: request.status)
+                        if let shippedInVersion = request.shippedInVersion {
+                            ShippedInVersionBadge(version: shippedInVersion)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -331,7 +337,12 @@ private struct FeatureRequestDetail: View {
                     )
 
                     VStack(alignment: .leading, spacing: 8) {
-                        FeatureRequestStatusBadge(status: request.status)
+                        HStack(spacing: 6) {
+                            FeatureRequestStatusBadge(status: request.status)
+                            if let shippedInVersion = request.shippedInVersion {
+                                ShippedInVersionBadge(version: shippedInVersion)
+                            }
+                        }
                         if request.target == .watchOS {
                             Label("Apple Watch", systemImage: "applewatch")
                                 .font(.subheadline)
@@ -374,6 +385,19 @@ private struct FeatureRequestStatusBadge: View {
         case .completed: .green
         case nil: .secondary
         }
+    }
+}
+
+private struct ShippedInVersionBadge: View {
+    let version: String
+
+    var body: some View {
+        Label("Shipped in \(version)", systemImage: "checkmark.circle.fill")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.green)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.green.opacity(0.12), in: Capsule())
     }
 }
 
@@ -427,7 +451,7 @@ private enum PublicRequestStage {
 private extension String {
     var publicRequestStage: PublicRequestStage? {
         switch self {
-        case "Under review": .inReview
+        case "Under review", "In review": .inReview
         case "Planned": .planned
         case "In progress", "Ready to release": .inProgress
         case "Released": .completed
@@ -458,7 +482,7 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
                         title: submission.title,
                         excerpt: submission.text,
                         version: "Preview",
-                        status: "Open",
+                        status: "Submitted",
                         count: 1,
                         note: "",
                         responseDraft: "",
@@ -468,7 +492,7 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
                     )
                 },
                 requests: { _ in previewRequests },
-                setVote: { id, voted, _ in
+                setVote: { id, voted, _, _ in
                     LooplineVoteResult(feedbackId: id, votes: voted ? 35 : 34, voted: voted)
                 }
             )
@@ -484,7 +508,8 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
             target: .ios,
             status: "In progress",
             voted: true,
-            updatedAt: "2026-07-16T12:00:00.000Z"
+            updatedAt: "2026-07-16T12:00:00.000Z",
+            shippedInVersion: nil
         ),
         LooplineFeatureRequest(
             id: "FDBK-2",
@@ -494,7 +519,8 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
             target: .watchOS,
             status: "Planned",
             voted: false,
-            updatedAt: "2026-07-15T12:00:00.000Z"
+            updatedAt: "2026-07-15T12:00:00.000Z",
+            shippedInVersion: nil
         ),
         LooplineFeatureRequest(
             id: "FDBK-3",
@@ -504,7 +530,8 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
             target: .ios,
             status: "Released",
             voted: false,
-            updatedAt: "2026-07-14T12:00:00.000Z"
+            updatedAt: "2026-07-14T12:00:00.000Z",
+            shippedInVersion: "2.4.0"
         ),
     ]
 }

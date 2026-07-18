@@ -59,7 +59,7 @@ struct LooplineClientTests {
 
         #expect(feedback.id == "FDBK-test")
         #expect(feedback.kind == .request)
-        #expect(feedback.status == "Open")
+        #expect(feedback.status == "Submitted")
     }
 
     @Test("Surfaces the server error message")
@@ -121,6 +121,157 @@ struct LooplineClientTests {
         #expect(request.target == .watchOS)
         #expect(request.status == "Planned")
         #expect(request.voted)
+        #expect(request.shippedInVersion == nil)
+    }
+
+    @Test("Decodes shippedInVersion when the request feed reports a published release")
+    func decodesShippedInVersion() async throws {
+        let recorder = RequestRecorder { _ in
+            try response(
+                statusCode: 200,
+                json: ["requests": [sampleRequest(shippedInVersion: "2.4.0")]]
+            )
+        }
+        let client = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        let requests = try await client.requests(externalUserID: "user-123")
+        let request = try #require(requests.first)
+        #expect(request.shippedInVersion == "2.4.0")
+    }
+
+    @Test("Decodes a null shippedInVersion as nil")
+    func decodesNullShippedInVersion() async throws {
+        let recorder = RequestRecorder { _ in
+            try response(
+                statusCode: 200,
+                json: ["requests": [sampleRequest(shippedInVersion: NSNull())]]
+            )
+        }
+        let client = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        let requests = try await client.requests(externalUserID: "user-123")
+        let request = try #require(requests.first)
+        #expect(request.shippedInVersion == nil)
+    }
+
+    @Test("Encodes customerTier on submission when provided, omits it otherwise")
+    func submissionEncodesCustomerTier() async throws {
+        let recorder = RequestRecorder { request in
+            let body = try requestBody(from: request)
+            let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
+            #expect(json["customerTier"] == "paying")
+            return try response(statusCode: 201, json: ["feedback": sampleFeedback()])
+        }
+        let client = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        _ = try await client.submit(
+            LooplineFeedbackSubmission(
+                kind: .bug,
+                title: "Crash",
+                text: "It crashed.",
+                customerTier: .paying
+            )
+        )
+
+        let omittingRecorder = RequestRecorder { request in
+            let body = try requestBody(from: request)
+            let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            #expect(json["customerTier"] == nil)
+            return try response(statusCode: 201, json: ["feedback": sampleFeedback()])
+        }
+        let omittingClient = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: omittingRecorder.session
+        )
+
+        _ = try await omittingClient.submit(
+            LooplineFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
+        )
+    }
+
+    @Test("Encodes a custom customerTier by its raw label")
+    func submissionEncodesCustomCustomerTier() async throws {
+        let recorder = RequestRecorder { request in
+            let body = try requestBody(from: request)
+            let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
+            #expect(json["customerTier"] == "enterprise")
+            return try response(statusCode: 201, json: ["feedback": sampleFeedback()])
+        }
+        let client = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        _ = try await client.submit(
+            LooplineFeedbackSubmission(
+                kind: .bug,
+                title: "Crash",
+                text: "It crashed.",
+                customerTier: .custom("enterprise")
+            )
+        )
+    }
+
+    @Test("Carries customerTier in the vote body when provided")
+    func voteEncodesCustomerTier() async throws {
+        let recorder = RequestRecorder { request in
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            let body = try requestBody(from: request)
+            let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
+            #expect(json["customerTier"] == "free")
+            return try response(
+                statusCode: 200,
+                json: [
+                    "feedbackId": "FDBK-request",
+                    "votes": 13,
+                    "voted": true,
+                ]
+            )
+        }
+        let client = LooplineClient(
+            configuration: LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        _ = try await client.setVote(
+            for: "FDBK-request",
+            voted: true,
+            externalUserID: "user-123",
+            customerTier: .free
+        )
     }
 
     @Test("Votes and removes votes using the iOS platform context")
@@ -240,7 +391,7 @@ struct LooplineClientTests {
 
         #expect(feedback.source == "ios")
         #expect(feedback.title == "Swift SDK live integration test")
-        #expect(feedback.status == "Open")
+        #expect(feedback.status == "Submitted")
 
         let requests = try await client.requests(externalUserID: "swift-live-reader")
         #expect(!requests.isEmpty)
@@ -293,7 +444,7 @@ private func sampleFeedback() -> [String: Any] {
         "title": "Schedule by weekday",
         "excerpt": "Please add weekday schedules.",
         "version": "1.2 (34)",
-        "status": "Open",
+        "status": "Submitted",
         "count": 1,
         "note": "",
         "responseDraft": "",
@@ -303,7 +454,7 @@ private func sampleFeedback() -> [String: Any] {
     ]
 }
 
-private func sampleRequest() -> [String: Any] {
+private func sampleRequest(shippedInVersion: Any = NSNull()) -> [String: Any] {
     [
         "id": "FDBK-request",
         "title": "Training complications",
@@ -313,6 +464,7 @@ private func sampleRequest() -> [String: Any] {
         "status": "Planned",
         "voted": true,
         "updatedAt": "2026-07-16T12:00:00.000Z",
+        "shippedInVersion": shippedInVersion,
     ]
 }
 

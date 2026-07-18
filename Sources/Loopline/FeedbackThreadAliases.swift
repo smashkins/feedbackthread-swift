@@ -1,4 +1,5 @@
 public typealias FeedbackThreadFeedbackKind = LooplineFeedbackKind
+public typealias FeedbackThreadCustomerTier = LooplineCustomerTier
 public typealias FeedbackThreadFeedbackSubmission = LooplineFeedbackSubmission
 public typealias FeedbackThreadFeedback = LooplineFeedback
 public typealias FeedbackThreadRequestTarget = LooplineRequestTarget

@@ -6,10 +6,10 @@ import Testing
 @testable import FeedbackThread
 
 @Suite("FeedbackThreadClient", .serialized)
-struct LooplineClientTests {
-    @Test("Offers only feature requests and bug reports for SDK submission")
+struct FeedbackThreadClientTests {
+    @Test("Offers feature requests, bug reports, and reviews for SDK submission")
     func exposesAppFeedbackKinds() {
-        #expect(FeedbackThreadFeedbackKind.allCases == [.request, .bug])
+        #expect(FeedbackThreadFeedbackKind.allCases == [.request, .bug, .review])
     }
 
     @Test("Submits the documented payload and idempotency key")
@@ -37,8 +37,8 @@ struct LooplineClientTests {
             )
         }
 
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -47,7 +47,7 @@ struct LooplineClientTests {
         )
 
         let feedback = try await client.submit(
-            LooplineFeedbackSubmission(
+            FeedbackThreadFeedbackSubmission(
                 kind: .request,
                 title: "Schedule by weekday",
                 text: "Please add weekday schedules.",
@@ -76,8 +76,8 @@ struct LooplineClientTests {
             )
         }
 
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "wrong-key",
                 source: "ios"
@@ -87,10 +87,10 @@ struct LooplineClientTests {
 
         do {
             _ = try await client.submit(
-                LooplineFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
+                FeedbackThreadFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
             )
             Issue.record("Expected a server error")
-        } catch let error as LooplineError {
+        } catch let error as FeedbackThreadError {
             #expect(error == .server(statusCode: 404, message: "Project was not found."))
         }
     }
@@ -106,8 +106,8 @@ struct LooplineClientTests {
                 json: ["requests": [sampleRequest()]]
             )
         }
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -132,8 +132,8 @@ struct LooplineClientTests {
                 json: ["requests": [sampleRequest(shippedInVersion: "2.4.0")]]
             )
         }
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -154,8 +154,8 @@ struct LooplineClientTests {
                 json: ["requests": [sampleRequest(shippedInVersion: NSNull())]]
             )
         }
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -176,8 +176,8 @@ struct LooplineClientTests {
             #expect(json["customerTier"] == "paying")
             return try response(statusCode: 201, json: ["feedback": sampleFeedback()])
         }
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -186,7 +186,7 @@ struct LooplineClientTests {
         )
 
         _ = try await client.submit(
-            LooplineFeedbackSubmission(
+            FeedbackThreadFeedbackSubmission(
                 kind: .bug,
                 title: "Crash",
                 text: "It crashed.",
@@ -200,8 +200,8 @@ struct LooplineClientTests {
             #expect(json["customerTier"] == nil)
             return try response(statusCode: 201, json: ["feedback": sampleFeedback()])
         }
-        let omittingClient = LooplineClient(
-            configuration: LooplineConfiguration(
+        let omittingClient = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -210,7 +210,7 @@ struct LooplineClientTests {
         )
 
         _ = try await omittingClient.submit(
-            LooplineFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
+            FeedbackThreadFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
         )
     }
 
@@ -222,8 +222,8 @@ struct LooplineClientTests {
             #expect(json["customerTier"] == "enterprise")
             return try response(statusCode: 201, json: ["feedback": sampleFeedback()])
         }
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -232,7 +232,7 @@ struct LooplineClientTests {
         )
 
         _ = try await client.submit(
-            LooplineFeedbackSubmission(
+            FeedbackThreadFeedbackSubmission(
                 kind: .bug,
                 title: "Crash",
                 text: "It crashed.",
@@ -257,8 +257,8 @@ struct LooplineClientTests {
                 ]
             )
         }
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -289,8 +289,8 @@ struct LooplineClientTests {
                 ]
             )
         }
-        let voteClient = LooplineClient(
-            configuration: LooplineConfiguration(
+        let voteClient = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -318,8 +318,8 @@ struct LooplineClientTests {
                 ]
             )
         }
-        let removeClient = LooplineClient(
-            configuration: LooplineConfiguration(
+        let removeClient = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "project-key",
                 source: "ios"
@@ -341,8 +341,8 @@ struct LooplineClientTests {
             Issue.record("A request should not be sent for an invalid configuration")
             return try response(statusCode: 500, json: [:])
         }
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: URL(string: "https://example.com")!,
                 projectKey: "  ",
                 source: "ios"
@@ -352,12 +352,75 @@ struct LooplineClientTests {
 
         do {
             _ = try await client.submit(
-                LooplineFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
+                FeedbackThreadFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
             )
             Issue.record("Expected an invalid configuration error")
-        } catch let error as LooplineError {
+        } catch let error as FeedbackThreadError {
             #expect(error == .invalidConfiguration("A FeedbackThread project key is required."))
         }
+    }
+
+    @Test("Rejects a non-HTTP(S) base URL scheme at configuration init")
+    func rejectsInvalidBaseURLScheme() {
+        #expect(throws: FeedbackThreadError.invalidConfiguration("The FeedbackThread base URL must use HTTP or HTTPS.")) {
+            _ = try FeedbackThreadConfiguration(
+                baseURL: URL(string: "ftp://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            )
+        }
+    }
+
+    @Test("Defaults the request timeout to 30 seconds")
+    func defaultsRequestTimeout() throws {
+        let configuration = try FeedbackThreadConfiguration(
+            baseURL: URL(string: "https://example.com")!,
+            projectKey: "project-key",
+            source: "ios"
+        )
+        #expect(configuration.requestTimeout == 30)
+    }
+
+    @Test("Applies the configured request timeout to outgoing requests")
+    func appliesConfiguredRequestTimeout() async throws {
+        let recorder = RequestRecorder { request in
+            #expect(request.timeoutInterval == 5)
+            return try response(statusCode: 201, json: ["feedback": sampleFeedback()])
+        }
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios",
+                requestTimeout: 5
+            ),
+            session: recorder.session
+        )
+
+        _ = try await client.submit(
+            FeedbackThreadFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
+        )
+    }
+
+    @Test("Deprecated Loopline-prefixed aliases still resolve to the FeedbackThread types (compat window, removed in 0.3.0)")
+    func deprecatedLooplineAliasesRemainUsable() async throws {
+        let recorder = RequestRecorder { _ in
+            try response(statusCode: 201, json: ["feedback": sampleFeedback()])
+        }
+        let legacyClient: LooplineClient = LooplineClient(
+            configuration: try LooplineConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        let feedback: LooplineFeedback = try await legacyClient.submit(
+            LooplineFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
+        )
+
+        #expect(feedback.status == "Submitted")
     }
 
     @Test("Submits through the live staging service when configured")
@@ -371,8 +434,8 @@ struct LooplineClientTests {
             return
         }
 
-        let client = LooplineClient(
-            configuration: LooplineConfiguration(
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
                 baseURL: baseURL,
                 projectKey: projectKey,
                 source: "ios"
@@ -380,11 +443,11 @@ struct LooplineClientTests {
         )
         let idempotencyKey = "swift-live-\(UUID().uuidString)"
         let feedback = try await client.submit(
-            LooplineFeedbackSubmission(
+            FeedbackThreadFeedbackSubmission(
                 kind: .bug,
                 title: "Swift SDK live integration test",
-                text: "Created by the Loopline Swift package integration test.",
-                appVersion: "Loopline SDK alpha"
+                text: "Created by the FeedbackThread Swift package integration test.",
+                appVersion: "FeedbackThread SDK alpha"
             ),
             idempotencyKey: idempotencyKey
         )
@@ -419,7 +482,7 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         guard let handler = Self.handler else {
-            client?.urlProtocol(self, didFailWithError: LooplineError.invalidResponse)
+            client?.urlProtocol(self, didFailWithError: FeedbackThreadError.invalidResponse)
             return
         }
 
@@ -494,7 +557,7 @@ private func requestBody(from request: URLRequest) throws -> Data {
         let bytesRead = stream.read(&buffer, maxLength: buffer.count)
         if bytesRead == 0 { break }
         if bytesRead < 0 {
-            throw stream.streamError ?? LooplineError.invalidResponse
+            throw stream.streamError ?? FeedbackThreadError.invalidResponse
         }
         body.append(buffer, count: bytesRead)
     }

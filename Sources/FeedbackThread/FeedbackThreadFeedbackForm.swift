@@ -1,7 +1,7 @@
 #if os(iOS) && canImport(SwiftUI)
 import SwiftUI
 
-public struct LooplineFeedbackForm: View {
+public struct FeedbackThreadFeedbackForm: View {
     private enum SubmissionPhase: Equatable {
         case editing
         case submitting
@@ -11,27 +11,27 @@ public struct LooplineFeedbackForm: View {
 
     private struct PendingSubmission: Equatable, Identifiable, Sendable {
         let id: String
-        let submission: LooplineFeedbackSubmission
+        let submission: FeedbackThreadFeedbackSubmission
     }
 
     @Environment(\.dismiss) private var dismiss
 
-    private let client: LooplineClient
+    private let client: FeedbackThreadClient
     private let appVersion: String?
     private let externalUserID: String?
-    private let onSubmitted: @MainActor @Sendable (LooplineFeedback) -> Void
+    private let onSubmitted: @MainActor @Sendable (FeedbackThreadFeedback) -> Void
 
-    @State private var kind: LooplineFeedbackKind = .request
+    @State private var kind: FeedbackThreadFeedbackKind = .request
     @State private var title = ""
     @State private var message = ""
     @State private var phase: SubmissionPhase = .editing
     @State private var pendingSubmission: PendingSubmission?
 
     public init(
-        client: LooplineClient,
+        client: FeedbackThreadClient,
         appVersion: String? = nil,
         externalUserID: String? = nil,
-        onSubmitted: @escaping @MainActor @Sendable (LooplineFeedback) -> Void = { _ in }
+        onSubmitted: @escaping @MainActor @Sendable (FeedbackThreadFeedback) -> Void = { _ in }
     ) {
         self.client = client
         self.appVersion = appVersion
@@ -44,7 +44,7 @@ public struct LooplineFeedbackForm: View {
             Form {
                 Section {
                     Picker("Feedback type", selection: $kind) {
-                        ForEach(LooplineFeedbackKind.allCases) { option in
+                        ForEach(FeedbackThreadFeedbackKind.allCases) { option in
                             Text(option.title).tag(option)
                         }
                     }
@@ -120,7 +120,7 @@ public struct LooplineFeedbackForm: View {
         let idempotencyKey = UUID().uuidString
         pendingSubmission = PendingSubmission(
             id: idempotencyKey,
-            submission: LooplineFeedbackSubmission(
+            submission: FeedbackThreadFeedbackSubmission(
                 kind: kind,
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 text: message.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -146,11 +146,11 @@ public struct LooplineFeedbackForm: View {
     }
 }
 
-private struct LooplineFeedbackFormPreviews: PreviewProvider {
+private struct FeedbackThreadFeedbackFormPreviews: PreviewProvider {
     static var previews: some View {
-        LooplineFeedbackForm(
-            client: LooplineClient { submission, _ in
-                LooplineFeedback(
+        FeedbackThreadFeedbackForm(
+            client: FeedbackThreadClient { submission, _ in
+                FeedbackThreadFeedback(
                     id: "FDBK-preview",
                     kind: submission.kind,
                     source: "ios",

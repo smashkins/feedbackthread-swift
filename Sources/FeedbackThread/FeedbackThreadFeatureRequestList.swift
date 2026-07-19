@@ -5,7 +5,7 @@ private enum FeatureRequestRoute: Hashable {
     case detail(String)
 }
 
-public struct LooplineFeatureRequestList: View {
+public struct FeedbackThreadFeatureRequestList: View {
     private enum LoadState: Equatable {
         case loading
         case loaded
@@ -48,20 +48,24 @@ public struct LooplineFeatureRequestList: View {
         }
     }
 
-    private let client: LooplineClient
+    private let client: FeedbackThreadClient
     private let appVersion: String?
     private let externalUserID: String?
     private let onDismiss: (() -> Void)?
 
-    @AppStorage("com.loopline.sdk.voter-id") private var storedVoterID = ""
-    @State private var requests: [LooplineFeatureRequest] = []
+    /// Legacy key used before the SDK's FeedbackThread rename. Read as a migration
+    /// fallback so existing installs keep their anonymous voter identity.
+    private static let legacyVoterIDKey = "com.loopline.sdk.voter-id"
+
+    @AppStorage("com.feedbackthread.sdk.voter-id") private var storedVoterID = ""
+    @State private var requests: [FeedbackThreadFeatureRequest] = []
     @State private var loadState: LoadState = .loading
     @State private var votingIDs: Set<String> = []
     @State private var activeSheet: ActiveSheet?
     @State private var selectedFilter: RequestFilter = .all
 
     public init(
-        client: LooplineClient,
+        client: FeedbackThreadClient,
         appVersion: String? = nil,
         externalUserID: String? = nil,
         onDismiss: (() -> Void)? = nil
@@ -110,7 +114,7 @@ public struct LooplineFeatureRequestList: View {
             await load()
         }
         .sheet(item: $activeSheet) { _ in
-            LooplineFeedbackForm(
+            FeedbackThreadFeedbackForm(
                 client: client,
                 appVersion: appVersion,
                 externalUserID: voterID,
@@ -163,7 +167,7 @@ public struct LooplineFeatureRequestList: View {
         return provided.isEmpty ? storedVoterID : provided
     }
 
-    private var filteredRequests: [LooplineFeatureRequest] {
+    private var filteredRequests: [FeedbackThreadFeatureRequest] {
         requests.filter { selectedFilter.includes($0.status) }
     }
 
@@ -192,7 +196,11 @@ public struct LooplineFeatureRequestList: View {
     }
 
     private func ensureVoterID() {
-        if voterID.isEmpty {
+        guard voterID.isEmpty else { return }
+        if let legacyVoterID = UserDefaults.standard.string(forKey: Self.legacyVoterIDKey),
+           !legacyVoterID.isEmpty {
+            storedVoterID = legacyVoterID
+        } else {
             storedVoterID = UUID().uuidString
         }
     }
@@ -212,7 +220,7 @@ public struct LooplineFeatureRequestList: View {
         }
     }
 
-    private func toggleVote(_ request: LooplineFeatureRequest) {
+    private func toggleVote(_ request: FeedbackThreadFeatureRequest) {
         guard !votingIDs.contains(request.id) else { return }
         votingIDs.insert(request.id)
         Task {
@@ -225,7 +233,7 @@ public struct LooplineFeatureRequestList: View {
                 )
                 guard let index = requests.firstIndex(where: { $0.id == request.id }) else { return }
                 let current = requests[index]
-                requests[index] = LooplineFeatureRequest(
+                requests[index] = FeedbackThreadFeatureRequest(
                     id: current.id,
                     title: current.title,
                     description: current.description,
@@ -272,7 +280,7 @@ private struct FeatureRequestMessage: View {
 }
 
 private struct FeatureRequestRow: View {
-    let request: LooplineFeatureRequest
+    let request: FeedbackThreadFeatureRequest
     let isVoting: Bool
     let onVote: () -> Void
 
@@ -317,7 +325,7 @@ private struct FeatureRequestRow: View {
 }
 
 private struct FeatureRequestDetail: View {
-    let request: LooplineFeatureRequest
+    let request: FeedbackThreadFeatureRequest
     let isVoting: Bool
     let onVote: () -> Void
 
@@ -470,12 +478,12 @@ private extension String {
     }
 }
 
-private struct LooplineFeatureRequestListPreviews: PreviewProvider {
+private struct FeedbackThreadFeatureRequestListPreviews: PreviewProvider {
     static var previews: some View {
-        LooplineFeatureRequestList(
-            client: LooplineClient(
+        FeedbackThreadFeatureRequestList(
+            client: FeedbackThreadClient(
                 submit: { submission, _ in
-                    LooplineFeedback(
+                    FeedbackThreadFeedback(
                         id: "FDBK-preview",
                         kind: submission.kind,
                         source: "ios",
@@ -493,14 +501,14 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
                 },
                 requests: { _ in previewRequests },
                 setVote: { id, voted, _, _ in
-                    LooplineVoteResult(feedbackId: id, votes: voted ? 35 : 34, voted: voted)
+                    FeedbackThreadVoteResult(feedbackId: id, votes: voted ? 35 : 34, voted: voted)
                 }
             )
         )
     }
 
     nonisolated private static let previewRequests = [
-        LooplineFeatureRequest(
+        FeedbackThreadFeatureRequest(
             id: "FDBK-1",
             title: "Breathing reminders",
             description: "Remind me when it is time to practice.",
@@ -511,7 +519,7 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
             updatedAt: "2026-07-16T12:00:00.000Z",
             shippedInVersion: nil
         ),
-        LooplineFeatureRequest(
+        FeedbackThreadFeatureRequest(
             id: "FDBK-2",
             title: "Training complications",
             description: "Show the next practice on my watch face.",
@@ -522,7 +530,7 @@ private struct LooplineFeatureRequestListPreviews: PreviewProvider {
             updatedAt: "2026-07-15T12:00:00.000Z",
             shippedInVersion: nil
         ),
-        LooplineFeatureRequest(
+        FeedbackThreadFeatureRequest(
             id: "FDBK-3",
             title: "Health integration",
             description: "Include completed breathing sessions in Health.",

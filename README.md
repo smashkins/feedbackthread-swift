@@ -16,13 +16,17 @@ For local development, choose **File → Add Package Dependencies… → Add Loc
 
 The repository is not tagged or published by this document change; creating the first beta tag is a separate release action.
 
+### Migrating from the `Loopline`-prefixed API (0.1.x → 0.2.0)
+
+As of 0.2.0, `FeedbackThread`-prefixed types (`FeedbackThreadClient`, `FeedbackThreadConfiguration`, `FeedbackThreadFeedbackSubmission`, `FeedbackThreadFeatureRequest`, and so on) are the real API. The previous `Loopline`-prefixed names (`LooplineClient`, `LooplineConfiguration`, …) still compile — they are now `@available(*, deprecated, renamed:)` typealiases pointing at the `FeedbackThread` types — but Xcode will flag every use with a deprecation warning, and **they are removed in 0.3.0**. Existing integrators (Apnea, FocusLock) should rename to the `FeedbackThread`-prefixed types before then; a simple find-and-replace of `Loopline` → `FeedbackThread` handles nearly every call site. The `Loopline` compatibility product/target itself keeps its name, so an existing `Package.resolved` pin against it does not need to be re-pinned.
+
 ## Configure the client
 
 ```swift
 import FeedbackThread
 
 let feedbackThread = FeedbackThreadClient(
-    configuration: FeedbackThreadConfiguration(
+    configuration: try FeedbackThreadConfiguration(
         baseURL: URL(string: "https://api.feedbackthread.com")!,
         projectKey: "your-project-key",
         source: "ios"
@@ -33,6 +37,8 @@ let feedbackThread = FeedbackThreadClient(
 Copy the project key from **SDK setup** in the signed-in dashboard. Treat it as a public project identifier: any value shipped in an app can be extracted. It can submit feedback, read the moderated public request feed, and vote. It cannot read the private workspace, call MCP, access store credentials, or perform developer mutations.
 
 Create one shared client near your app root and inject it into the settings or support flow that presents FeedbackThread UI. Do not create a new client for every render.
+
+`FeedbackThreadConfiguration.init` throws: it validates that `baseURL` uses the `http` or `https` scheme, matching the Android SDK's base URL validation. It also accepts an optional `requestTimeout: TimeInterval` (default `30`), applied to every outgoing request, mirroring Android's connect/read timeouts.
 
 ## Present the feature-request list
 

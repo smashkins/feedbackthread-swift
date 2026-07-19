@@ -3,9 +3,10 @@ import Foundation
 import FoundationNetworking
 #endif
 
-public enum LooplineFeedbackKind: String, Codable, CaseIterable, Identifiable, Sendable {
+public enum FeedbackThreadFeedbackKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case request = "Requests"
     case bug = "Bugs"
+    case review = "Reviews"
 
     public var id: Self { self }
 
@@ -13,6 +14,7 @@ public enum LooplineFeedbackKind: String, Codable, CaseIterable, Identifiable, S
         switch self {
         case .bug: "Bug"
         case .request: "Request"
+        case .review: "Review"
         }
     }
 }
@@ -21,7 +23,7 @@ public enum LooplineFeedbackKind: String, Codable, CaseIterable, Identifiable, S
 ///
 /// Pass the same signal you trust for your own paywall — whatever your app already
 /// uses to distinguish free users from paying customers.
-public enum LooplineCustomerTier: Sendable, Equatable {
+public enum FeedbackThreadCustomerTier: Sendable, Equatable {
     case free
     case paying
     case custom(String)
@@ -35,28 +37,28 @@ public enum LooplineCustomerTier: Sendable, Equatable {
     }
 }
 
-extension LooplineCustomerTier: Encodable {
+extension FeedbackThreadCustomerTier: Encodable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
 }
 
-public struct LooplineFeedbackSubmission: Encodable, Equatable, Sendable {
-    public var kind: LooplineFeedbackKind
+public struct FeedbackThreadFeedbackSubmission: Encodable, Equatable, Sendable {
+    public var kind: FeedbackThreadFeedbackKind
     public var title: String
     public var text: String
     public var appVersion: String?
     public var externalUserID: String?
-    public var customerTier: LooplineCustomerTier?
+    public var customerTier: FeedbackThreadCustomerTier?
 
     public init(
-        kind: LooplineFeedbackKind,
+        kind: FeedbackThreadFeedbackKind,
         title: String,
         text: String,
         appVersion: String? = nil,
         externalUserID: String? = nil,
-        customerTier: LooplineCustomerTier? = nil
+        customerTier: FeedbackThreadCustomerTier? = nil
     ) {
         self.kind = kind
         self.title = title
@@ -76,9 +78,9 @@ public struct LooplineFeedbackSubmission: Encodable, Equatable, Sendable {
     }
 }
 
-public struct LooplineFeedback: Decodable, Equatable, Sendable {
+public struct FeedbackThreadFeedback: Decodable, Equatable, Sendable {
     public let id: String
-    public let kind: LooplineFeedbackKind
+    public let kind: FeedbackThreadFeedbackKind
     public let source: String
     public let title: String
     public let excerpt: String
@@ -92,7 +94,7 @@ public struct LooplineFeedback: Decodable, Equatable, Sendable {
     public let updatedAt: String
 }
 
-public enum LooplineRequestTarget: String, Codable, Sendable {
+public enum FeedbackThreadRequestTarget: String, Codable, Sendable {
     case ios
     case android
     case watchOS = "watchos"
@@ -105,31 +107,41 @@ public enum LooplineRequestTarget: String, Codable, Sendable {
     }
 }
 
-public struct LooplineFeatureRequest: Decodable, Equatable, Identifiable, Sendable {
+public struct FeedbackThreadFeatureRequest: Decodable, Equatable, Identifiable, Sendable {
     public let id: String
     public let title: String
     public let description: String
     public let votes: Int
-    public let target: LooplineRequestTarget
+    public let target: FeedbackThreadRequestTarget
     public let status: String
     public let voted: Bool
     public let updatedAt: String
     public let shippedInVersion: String?
 }
 
-public struct LooplineConfiguration: Equatable, Sendable {
+public struct FeedbackThreadConfiguration: Equatable, Sendable {
     public var baseURL: URL
     public var projectKey: String
     public var source: String
+    public var requestTimeout: TimeInterval
 
-    public init(baseURL: URL, projectKey: String, source: String) {
+    public init(
+        baseURL: URL,
+        projectKey: String,
+        source: String,
+        requestTimeout: TimeInterval = 30
+    ) throws {
+        guard let scheme = baseURL.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            throw FeedbackThreadError.invalidConfiguration("The FeedbackThread base URL must use HTTP or HTTPS.")
+        }
         self.baseURL = baseURL
         self.projectKey = projectKey
         self.source = source
+        self.requestTimeout = requestTimeout
     }
 }
 
-public enum LooplineError: Error, Equatable, LocalizedError, Sendable {
+public enum FeedbackThreadError: Error, Equatable, LocalizedError, Sendable {
     case invalidConfiguration(String)
     case invalidResponse
     case server(statusCode: Int, message: String)
@@ -143,28 +155,28 @@ public enum LooplineError: Error, Equatable, LocalizedError, Sendable {
     }
 }
 
-public struct LooplineClient: Sendable {
+public struct FeedbackThreadClient: Sendable {
     public typealias SubmissionHandler = @Sendable (
-        _ submission: LooplineFeedbackSubmission,
+        _ submission: FeedbackThreadFeedbackSubmission,
         _ idempotencyKey: String
-    ) async throws -> LooplineFeedback
-    public typealias RequestListHandler = @Sendable (_ externalUserID: String?) async throws -> [LooplineFeatureRequest]
+    ) async throws -> FeedbackThreadFeedback
+    public typealias RequestListHandler = @Sendable (_ externalUserID: String?) async throws -> [FeedbackThreadFeatureRequest]
     public typealias VoteHandler = @Sendable (
         _ requestID: String,
         _ voted: Bool,
         _ externalUserID: String,
-        _ customerTier: LooplineCustomerTier?
-    ) async throws -> LooplineVoteResult
+        _ customerTier: FeedbackThreadCustomerTier?
+    ) async throws -> FeedbackThreadVoteResult
 
     private let submissionHandler: SubmissionHandler
     private let requestListHandler: RequestListHandler
     private let voteHandler: VoteHandler
 
     public init(
-        configuration: LooplineConfiguration,
+        configuration: FeedbackThreadConfiguration,
         session: URLSession = .shared
     ) {
-        let transport = LooplineHTTPTransport(configuration: configuration, session: session)
+        let transport = FeedbackThreadHTTPTransport(configuration: configuration, session: session)
         submissionHandler = { submission, idempotencyKey in
             try await transport.submit(submission, idempotencyKey: idempotencyKey)
         }
@@ -185,7 +197,7 @@ public struct LooplineClient: Sendable {
         submissionHandler = submit
         requestListHandler = { _ in [] }
         voteHandler = { _, _, _, _ in
-            throw LooplineError.invalidConfiguration("This FeedbackThread client does not support voting.")
+            throw FeedbackThreadError.invalidConfiguration("This FeedbackThread client does not support voting.")
         }
     }
 
@@ -201,13 +213,13 @@ public struct LooplineClient: Sendable {
 
     @discardableResult
     public func submit(
-        _ submission: LooplineFeedbackSubmission,
+        _ submission: FeedbackThreadFeedbackSubmission,
         idempotencyKey: String = UUID().uuidString
-    ) async throws -> LooplineFeedback {
+    ) async throws -> FeedbackThreadFeedback {
         try await submissionHandler(submission, idempotencyKey)
     }
 
-    public func requests(externalUserID: String? = nil) async throws -> [LooplineFeatureRequest] {
+    public func requests(externalUserID: String? = nil) async throws -> [FeedbackThreadFeatureRequest] {
         try await requestListHandler(externalUserID)
     }
 
@@ -216,40 +228,40 @@ public struct LooplineClient: Sendable {
         for requestID: String,
         voted: Bool,
         externalUserID: String,
-        customerTier: LooplineCustomerTier? = nil
-    ) async throws -> LooplineVoteResult {
+        customerTier: FeedbackThreadCustomerTier? = nil
+    ) async throws -> FeedbackThreadVoteResult {
         try await voteHandler(requestID, voted, externalUserID, customerTier)
     }
 }
 
-public struct LooplineVoteResult: Decodable, Equatable, Sendable {
+public struct FeedbackThreadVoteResult: Decodable, Equatable, Sendable {
     public let feedbackId: String
     public let votes: Int
     public let voted: Bool
 }
 
-private final class LooplineHTTPTransport: @unchecked Sendable {
-    private let configuration: LooplineConfiguration
+private final class FeedbackThreadHTTPTransport: @unchecked Sendable {
+    private let configuration: FeedbackThreadConfiguration
     private let session: URLSession
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(configuration: LooplineConfiguration, session: URLSession) {
+    init(configuration: FeedbackThreadConfiguration, session: URLSession) {
         self.configuration = configuration
         self.session = session
     }
 
     func submit(
-        _ submission: LooplineFeedbackSubmission,
+        _ submission: FeedbackThreadFeedbackSubmission,
         idempotencyKey: String
-    ) async throws -> LooplineFeedback {
+    ) async throws -> FeedbackThreadFeedback {
         let projectKey = configuration.projectKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let source = configuration.source.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !projectKey.isEmpty else {
-            throw LooplineError.invalidConfiguration("A FeedbackThread project key is required.")
+            throw FeedbackThreadError.invalidConfiguration("A FeedbackThread project key is required.")
         }
         guard !source.isEmpty else {
-            throw LooplineError.invalidConfiguration("A FeedbackThread source is required.")
+            throw FeedbackThreadError.invalidConfiguration("A FeedbackThread source is required.")
         }
 
         let endpoint = configuration.baseURL
@@ -260,49 +272,51 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
+        request.timeoutInterval = configuration.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
-        request.httpBody = try encoder.encode(LooplineIngestionPayload(submission: submission, source: source))
+        request.httpBody = try encoder.encode(FeedbackThreadIngestionPayload(submission: submission, source: source))
 
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw LooplineError.invalidResponse
+            throw FeedbackThreadError.invalidResponse
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            let error = try? decoder.decode(LooplineErrorEnvelope.self, from: data)
-            throw LooplineError.server(
+            let error = try? decoder.decode(FeedbackThreadErrorEnvelope.self, from: data)
+            throw FeedbackThreadError.server(
                 statusCode: httpResponse.statusCode,
                 message: error?.error.message ?? "FeedbackThread returned HTTP \(httpResponse.statusCode)."
             )
         }
 
-        guard let envelope = try? decoder.decode(LooplineFeedbackEnvelope.self, from: data) else {
-            throw LooplineError.invalidResponse
+        guard let envelope = try? decoder.decode(FeedbackThreadFeedbackEnvelope.self, from: data) else {
+            throw FeedbackThreadError.invalidResponse
         }
         return envelope.feedback
     }
 
-    func requests(externalUserID: String?) async throws -> [LooplineFeatureRequest] {
+    func requests(externalUserID: String?) async throws -> [FeedbackThreadFeatureRequest] {
         var components = URLComponents(
             url: try projectEndpoint().appendingPathComponent("requests"),
             resolvingAgainstBaseURL: false
         )
         components?.queryItems = [URLQueryItem(name: "platform", value: "ios")]
         guard let endpoint = components?.url else {
-            throw LooplineError.invalidConfiguration("The FeedbackThread base URL is invalid.")
+            throw FeedbackThreadError.invalidConfiguration("The FeedbackThread base URL is invalid.")
         }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "GET"
+        request.timeoutInterval = configuration.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let externalUserID = normalizedUserID(externalUserID) {
             request.setValue(externalUserID, forHTTPHeaderField: "X-FeedbackThread-User")
         }
 
         let data = try await responseData(for: request)
-        guard let envelope = try? decoder.decode(LooplineRequestsEnvelope.self, from: data) else {
-            throw LooplineError.invalidResponse
+        guard let envelope = try? decoder.decode(FeedbackThreadRequestsEnvelope.self, from: data) else {
+            throw FeedbackThreadError.invalidResponse
         }
         return envelope.requests
     }
@@ -311,10 +325,10 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
         for requestID: String,
         voted: Bool,
         externalUserID: String,
-        customerTier: LooplineCustomerTier? = nil
-    ) async throws -> LooplineVoteResult {
+        customerTier: FeedbackThreadCustomerTier? = nil
+    ) async throws -> FeedbackThreadVoteResult {
         guard let userID = normalizedUserID(externalUserID) else {
-            throw LooplineError.invalidConfiguration("A stable user ID is required for voting.")
+            throw FeedbackThreadError.invalidConfiguration("A stable user ID is required for voting.")
         }
         var components = URLComponents(
             url: try projectEndpoint()
@@ -325,21 +339,22 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
         )
         components?.queryItems = [URLQueryItem(name: "platform", value: "ios")]
         guard let endpoint = components?.url else {
-            throw LooplineError.invalidConfiguration("The FeedbackThread base URL is invalid.")
+            throw FeedbackThreadError.invalidConfiguration("The FeedbackThread base URL is invalid.")
         }
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = voted ? "POST" : "DELETE"
+        request.timeoutInterval = configuration.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(userID, forHTTPHeaderField: "X-FeedbackThread-User")
         if let customerTier {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try encoder.encode(LooplineVotePayload(customerTier: customerTier))
+            request.httpBody = try encoder.encode(FeedbackThreadVotePayload(customerTier: customerTier))
         }
 
         let data = try await responseData(for: request)
-        guard let result = try? decoder.decode(LooplineVoteResult.self, from: data) else {
-            throw LooplineError.invalidResponse
+        guard let result = try? decoder.decode(FeedbackThreadVoteResult.self, from: data) else {
+            throw FeedbackThreadError.invalidResponse
         }
         return result
     }
@@ -347,7 +362,7 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
     private func projectEndpoint() throws -> URL {
         let projectKey = configuration.projectKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !projectKey.isEmpty else {
-            throw LooplineError.invalidConfiguration("A FeedbackThread project key is required.")
+            throw FeedbackThreadError.invalidConfiguration("A FeedbackThread project key is required.")
         }
         return configuration.baseURL
             .appendingPathComponent("v1")
@@ -363,11 +378,11 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
     private func responseData(for request: URLRequest) async throws -> Data {
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw LooplineError.invalidResponse
+            throw FeedbackThreadError.invalidResponse
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            let error = try? decoder.decode(LooplineErrorEnvelope.self, from: data)
-            throw LooplineError.server(
+            let error = try? decoder.decode(FeedbackThreadErrorEnvelope.self, from: data)
+            throw FeedbackThreadError.server(
                 statusCode: httpResponse.statusCode,
                 message: error?.error.message ?? "FeedbackThread returned HTTP \(httpResponse.statusCode)."
             )
@@ -376,16 +391,16 @@ private final class LooplineHTTPTransport: @unchecked Sendable {
     }
 }
 
-private struct LooplineIngestionPayload: Encodable {
-    let kind: LooplineFeedbackKind
+private struct FeedbackThreadIngestionPayload: Encodable {
+    let kind: FeedbackThreadFeedbackKind
     let source: String
     let title: String
     let text: String
     let appVersion: String?
     let externalUserID: String?
-    let customerTier: LooplineCustomerTier?
+    let customerTier: FeedbackThreadCustomerTier?
 
-    init(submission: LooplineFeedbackSubmission, source: String) {
+    init(submission: FeedbackThreadFeedbackSubmission, source: String) {
         kind = submission.kind
         self.source = source
         title = submission.title
@@ -406,19 +421,19 @@ private struct LooplineIngestionPayload: Encodable {
     }
 }
 
-private struct LooplineVotePayload: Encodable {
-    let customerTier: LooplineCustomerTier
+private struct FeedbackThreadVotePayload: Encodable {
+    let customerTier: FeedbackThreadCustomerTier
 }
 
-private struct LooplineFeedbackEnvelope: Decodable {
-    let feedback: LooplineFeedback
+private struct FeedbackThreadFeedbackEnvelope: Decodable {
+    let feedback: FeedbackThreadFeedback
 }
 
-private struct LooplineRequestsEnvelope: Decodable {
-    let requests: [LooplineFeatureRequest]
+private struct FeedbackThreadRequestsEnvelope: Decodable {
+    let requests: [FeedbackThreadFeatureRequest]
 }
 
-private struct LooplineErrorEnvelope: Decodable {
+private struct FeedbackThreadErrorEnvelope: Decodable {
     struct APIError: Decodable {
         let message: String
     }

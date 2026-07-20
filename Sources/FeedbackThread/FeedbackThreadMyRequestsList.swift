@@ -13,25 +13,26 @@ public struct FeedbackThreadMyRequestsList: View {
     }
 
     private let client: FeedbackThreadClient
-    private let externalUserID: String
+    private let externalUserID: String?
     private let onDismiss: (() -> Void)?
     private let onUnreadCountChange: ((Int) -> Void)?
 
+    @AppStorage("com.feedbackthread.sdk.voter-id") private var storedVoterID = ""
     @State private var myRequests: [FeedbackThreadMyRequest] = []
     @State private var loadState: LoadState = .loading
 
     /// - Parameters:
     ///   - externalUserID: The same stable identity already used for voting
-    ///     and submission (see `FeedbackThreadFeatureRequestList`'s
-    ///     `voterID`) - a developer-supplied user ID, or a locally generated
-    ///     anonymous one. Required: this surface only ever shows cards
-    ///     matching this exact identity.
+    ///     and submission. When nil, the SDK's persisted anonymous voter ID
+    ///     is used - the same one the request board generates - so anonymous
+    ///     users see their own requests too. This surface only ever shows
+    ///     cards matching this exact identity.
     ///   - onUnreadCountChange: Called after every load/refresh with the
     ///     number of shipped-but-unacknowledged cards, so a host app can
     ///     badge its own menu item without re-implementing the fetch.
     public init(
         client: FeedbackThreadClient,
-        externalUserID: String,
+        externalUserID: String? = nil,
         onDismiss: (() -> Void)? = nil,
         onUnreadCountChange: ((Int) -> Void)? = nil
     ) {
@@ -39,6 +40,16 @@ public struct FeedbackThreadMyRequestsList: View {
         self.externalUserID = externalUserID
         self.onDismiss = onDismiss
         self.onUnreadCountChange = onUnreadCountChange
+    }
+
+    private var voterID: String {
+        let provided = externalUserID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return provided.isEmpty ? storedVoterID : provided
+    }
+
+    private func ensureVoterID() {
+        guard voterID.isEmpty else { return }
+        storedVoterID = UUID().uuidString
     }
 
     public var body: some View {
@@ -54,7 +65,10 @@ public struct FeedbackThreadMyRequestsList: View {
                     }
                 }
         }
-        .task { await load() }
+        .task {
+            ensureVoterID()
+            await load()
+        }
     }
 
     @ViewBuilder
@@ -123,8 +137,8 @@ public struct FeedbackThreadMyRequestsList: View {
     private func load() async {
         if myRequests.isEmpty { loadState = .loading }
         do {
-            async let requestsTask = client.myRequests(externalUserID: externalUserID)
-            async let updatesTask = client.myUpdates(externalUserID: externalUserID)
+            async let requestsTask = client.myRequests(externalUserID: voterID)
+            async let updatesTask = client.myUpdates(externalUserID: voterID)
             let (requests, updates) = try await (requestsTask, updatesTask)
             guard !Task.isCancelled else { return }
             myRequests = requests
@@ -137,7 +151,7 @@ public struct FeedbackThreadMyRequestsList: View {
             if !updates.updates.isEmpty {
                 let ids = updates.updates.map(\.id)
                 Task {
-                    let remaining = (try? await client.acknowledgeUpdates(ids: ids, externalUserID: externalUserID))
+                    let remaining = (try? await client.acknowledgeUpdates(ids: ids, externalUserID: voterID))
                         ?? updates.unreadCount
                     onUnreadCountChange?(remaining)
                 }

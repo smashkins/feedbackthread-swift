@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- `FeedbackThreadMyRequestsList` no longer requires `externalUserID`: when omitted it reuses the SDK's persisted anonymous voter ID (the same one the request board generates), so anonymous users — the default — can see their own requests. This matches the Android behavior.
+
 ## 0.3.0
 
 Close the loop for end users, and harden the drop-in surfaces.

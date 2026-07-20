@@ -1,0 +1,292 @@
+#if os(iOS) && canImport(SwiftUI)
+import SwiftUI
+
+/// A drop-in "My requests" surface: closes the loop for the end user who
+/// submitted feedback through the SDK. Unlike ``FeedbackThreadFeatureRequestList``
+/// (the public board), this always shows the caller's own cards, including
+/// ones still waiting for review that never appear anywhere public.
+public struct FeedbackThreadMyRequestsList: View {
+    private enum LoadState: Equatable {
+        case loading
+        case loaded
+        case failed(String)
+    }
+
+    private let client: FeedbackThreadClient
+    private let externalUserID: String
+    private let onDismiss: (() -> Void)?
+    private let onUnreadCountChange: ((Int) -> Void)?
+
+    @State private var myRequests: [FeedbackThreadMyRequest] = []
+    @State private var loadState: LoadState = .loading
+
+    /// - Parameters:
+    ///   - externalUserID: The same stable identity already used for voting
+    ///     and submission (see `FeedbackThreadFeatureRequestList`'s
+    ///     `voterID`) - a developer-supplied user ID, or a locally generated
+    ///     anonymous one. Required: this surface only ever shows cards
+    ///     matching this exact identity.
+    ///   - onUnreadCountChange: Called after every load/refresh with the
+    ///     number of shipped-but-unacknowledged cards, so a host app can
+    ///     badge its own menu item without re-implementing the fetch.
+    public init(
+        client: FeedbackThreadClient,
+        externalUserID: String,
+        onDismiss: (() -> Void)? = nil,
+        onUnreadCountChange: ((Int) -> Void)? = nil
+    ) {
+        self.client = client
+        self.externalUserID = externalUserID
+        self.onDismiss = onDismiss
+        self.onUnreadCountChange = onUnreadCountChange
+    }
+
+    public var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle("My requests")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if let onDismiss {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done", action: onDismiss)
+                        }
+                    }
+                }
+        }
+        .task { await load() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch loadState {
+        case .loading where myRequests.isEmpty:
+            ProgressView("Loading your requests…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let message) where myRequests.isEmpty:
+            MyRequestsMessage(
+                title: "Couldn’t load your requests",
+                message: message,
+                systemImage: "wifi.exclamationmark",
+                actionTitle: "Try again",
+                action: { Task { await load() } }
+            )
+        default:
+            List {
+                myRequestsSection(title: "Waiting for review", items: pendingReviewItems)
+                myRequestsSection(title: "In progress", items: inProgressItems)
+                myRequestsSection(title: "Shipped", items: shippedItems)
+            }
+            .listStyle(.insetGrouped)
+            .overlay {
+                if myRequests.isEmpty {
+                    MyRequestsMessage(
+                        title: "No requests yet",
+                        message: "Anything you submit shows up here, including while it's waiting for review.",
+                        systemImage: "tray"
+                    )
+                }
+            }
+            .refreshable { await load() }
+        }
+    }
+
+    @ViewBuilder
+    private func myRequestsSection(title: String, items: [FeedbackThreadMyRequest]) -> some View {
+        if !items.isEmpty {
+            Section(title) {
+                ForEach(items) { item in
+                    MyRequestRow(item: item)
+                }
+            }
+        }
+    }
+
+    private var pendingReviewItems: [FeedbackThreadMyRequest] {
+        myRequests.filter { $0.status.feedbackThreadRequestStage == .pendingReview }
+    }
+
+    private var inProgressItems: [FeedbackThreadMyRequest] {
+        myRequests.filter {
+            switch $0.status.feedbackThreadRequestStage {
+            case .inReview, .planned, .inProgress: true
+            default: false
+            }
+        }
+    }
+
+    private var shippedItems: [FeedbackThreadMyRequest] {
+        myRequests.filter { $0.status.feedbackThreadRequestStage == .completed }
+    }
+
+    @MainActor
+    private func load() async {
+        if myRequests.isEmpty { loadState = .loading }
+        do {
+            async let requestsTask = client.myRequests(externalUserID: externalUserID)
+            async let updatesTask = client.myUpdates(externalUserID: externalUserID)
+            let (requests, updates) = try await (requestsTask, updatesTask)
+            guard !Task.isCancelled else { return }
+            myRequests = requests
+            loadState = .loaded
+            onUnreadCountChange?(updates.unreadCount)
+            // Viewing this list is the acknowledgement: once the caller has
+            // seen the Shipped section (rendered from `myRequests`, not from
+            // `updates`), mark those shipped cards read so the badge clears.
+            // Best-effort - a failure here doesn't affect what's on screen.
+            if !updates.updates.isEmpty {
+                let ids = updates.updates.map(\.id)
+                Task {
+                    let remaining = (try? await client.acknowledgeUpdates(ids: ids, externalUserID: externalUserID))
+                        ?? updates.unreadCount
+                    onUnreadCountChange?(remaining)
+                }
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            loadState = .failed(error.localizedDescription)
+        }
+    }
+}
+
+private struct MyRequestsMessage: View {
+    let title: String
+    let message: String
+    let systemImage: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.title)
+                .foregroundStyle(.secondary)
+            Text(title)
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct MyRequestRow: View {
+    let item: FeedbackThreadMyRequest
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(item.title)
+                .font(.headline)
+            HStack(spacing: 6) {
+                Text(item.status.feedbackThreadRequestLabel)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(statusColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(statusColor.opacity(0.12), in: Capsule())
+                if let shippedInVersion = item.shippedInVersion {
+                    Label("Shipped in \(shippedInVersion)", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.green)
+                }
+                Spacer()
+                Label("\(item.voteCount)", systemImage: "arrow.up.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var statusColor: Color {
+        switch item.status.feedbackThreadRequestStage {
+        case .pendingReview: .orange
+        case .inReview: .cyan
+        case .planned: .purple
+        case .inProgress: .blue
+        case .completed: .green
+        case .unknown: .secondary
+        }
+    }
+}
+
+private struct FeedbackThreadMyRequestsListPreviews: PreviewProvider {
+    static var previews: some View {
+        FeedbackThreadMyRequestsList(
+            client: FeedbackThreadClient(
+                submit: { submission, _ in
+                    FeedbackThreadFeedback(
+                        id: "FDBK-preview",
+                        kind: submission.kind,
+                        source: "ios",
+                        title: submission.title,
+                        excerpt: submission.text,
+                        version: "Preview",
+                        status: "Submitted",
+                        count: 1,
+                        note: "",
+                        responseDraft: "",
+                        responseState: "Not started",
+                        createdAt: "2026-07-16T12:00:00.000Z",
+                        updatedAt: "2026-07-16T12:00:00.000Z"
+                    )
+                },
+                requests: { _ in [] },
+                setVote: { id, voted, _, _ in
+                    FeedbackThreadVoteResult(feedbackId: id, votes: 1, voted: voted)
+                },
+                myRequests: { _ in previewRequests },
+                myUpdates: { _ in
+                    FeedbackThreadMyUpdatesResult(
+                        updates: [
+                            FeedbackThreadMyUpdate(
+                                id: "FDBK-3",
+                                title: "Health integration",
+                                shippedVersion: "2.4.0",
+                                publishedAt: "2026-07-14T12:00:00.000Z"
+                            ),
+                        ],
+                        unreadCount: 1
+                    )
+                }
+            ),
+            externalUserID: "preview-user"
+        )
+    }
+
+    nonisolated private static let previewRequests = [
+        FeedbackThreadMyRequest(
+            id: "FDBK-1",
+            title: "Breathing reminders",
+            status: "Submitted",
+            createdAt: "2026-07-17T12:00:00.000Z",
+            voteCount: 1,
+            shippedInVersion: nil
+        ),
+        FeedbackThreadMyRequest(
+            id: "FDBK-2",
+            title: "Training complications",
+            status: "Planned",
+            createdAt: "2026-07-15T12:00:00.000Z",
+            voteCount: 12,
+            shippedInVersion: nil
+        ),
+        FeedbackThreadMyRequest(
+            id: "FDBK-3",
+            title: "Health integration",
+            status: "Released",
+            createdAt: "2026-07-14T12:00:00.000Z",
+            voteCount: 9,
+            shippedInVersion: "2.4.0"
+        ),
+    ]
+}
+#endif

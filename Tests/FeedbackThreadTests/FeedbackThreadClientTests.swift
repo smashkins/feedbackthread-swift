@@ -335,6 +335,144 @@ struct FeedbackThreadClientTests {
         #expect(removed.votes == 12)
     }
 
+    @Test("Loads my requests, including a private Submitted one, with the voter identity header")
+    func loadsMyRequests() async throws {
+        let recorder = RequestRecorder { request in
+            #expect(request.httpMethod == "GET")
+            #expect(request.url?.absoluteString == "https://example.com/v1/projects/project-key/my/requests")
+            #expect(request.value(forHTTPHeaderField: "X-FeedbackThread-User") == "user-123")
+            return try response(
+                statusCode: 200,
+                json: ["requests": [sampleMyRequest(), sampleMyRequest(id: "FDBK-pending", status: "Submitted", shippedInVersion: NSNull())]]
+            )
+        }
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        let myRequests = try await client.myRequests(externalUserID: "user-123")
+        #expect(myRequests.count == 2)
+        let pending = try #require(myRequests.first { $0.id == "FDBK-pending" })
+        #expect(pending.status == "Submitted")
+        #expect(pending.status.feedbackThreadRequestStage == .pendingReview)
+        #expect(pending.shippedInVersion == nil)
+    }
+
+    @Test("Rejects loading my requests without a stable user ID")
+    func rejectsMyRequestsWithoutIdentity() async throws {
+        let recorder = RequestRecorder { _ in
+            Issue.record("A request should not be sent without an identity")
+            return try response(statusCode: 500, json: [:])
+        }
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        do {
+            _ = try await client.myRequests(externalUserID: "   ")
+            Issue.record("Expected an invalid configuration error")
+        } catch let error as FeedbackThreadError {
+            #expect(error == .invalidConfiguration("A stable user ID is required for my requests."))
+        }
+    }
+
+    @Test("Loads my updates and their unread count")
+    func loadsMyUpdates() async throws {
+        let recorder = RequestRecorder { request in
+            #expect(request.httpMethod == "GET")
+            #expect(request.url?.absoluteString == "https://example.com/v1/projects/project-key/my/updates")
+            #expect(request.value(forHTTPHeaderField: "X-FeedbackThread-User") == "user-123")
+            return try response(
+                statusCode: 200,
+                json: [
+                    "updates": [
+                        [
+                            "id": "FDBK-shipped",
+                            "title": "Health integration",
+                            "shippedVersion": "2.4.0",
+                            "publishedAt": "2026-07-16T12:00:00.000Z",
+                        ],
+                    ],
+                    "unreadCount": 1,
+                ]
+            )
+        }
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        let result = try await client.myUpdates(externalUserID: "user-123")
+        #expect(result.unreadCount == 1)
+        let update = try #require(result.updates.first)
+        #expect(update.id == "FDBK-shipped")
+        #expect(update.shippedVersion == "2.4.0")
+    }
+
+    @Test("Acknowledges updates and returns the fresh unread count")
+    func acknowledgesUpdates() async throws {
+        let recorder = RequestRecorder { request in
+            #expect(request.httpMethod == "POST")
+            #expect(request.url?.absoluteString == "https://example.com/v1/projects/project-key/my/updates/ack")
+            #expect(request.value(forHTTPHeaderField: "X-FeedbackThread-User") == "user-123")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+
+            let body = try requestBody(from: request)
+            let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: [String]])
+            #expect(json["feedbackIds"] == ["FDBK-shipped"])
+
+            return try response(statusCode: 200, json: ["unreadCount": 0])
+        }
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        let unreadCount = try await client.acknowledgeUpdates(ids: ["FDBK-shipped"], externalUserID: "user-123")
+        #expect(unreadCount == 0)
+    }
+
+    @Test("Rejects acknowledging updates with no ids")
+    func rejectsAcknowledgingWithNoIDs() async throws {
+        let recorder = RequestRecorder { _ in
+            Issue.record("A request should not be sent with no ids")
+            return try response(statusCode: 500, json: [:])
+        }
+        let client = FeedbackThreadClient(
+            configuration: try FeedbackThreadConfiguration(
+                baseURL: URL(string: "https://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            ),
+            session: recorder.session
+        )
+
+        do {
+            _ = try await client.acknowledgeUpdates(ids: [], externalUserID: "user-123")
+            Issue.record("Expected an invalid configuration error")
+        } catch let error as FeedbackThreadError {
+            #expect(error == .invalidConfiguration("At least one feedback ID is required to acknowledge updates."))
+        }
+    }
+
     @Test("Rejects an empty project key before sending")
     func rejectsEmptyProjectKey() async throws {
         let recorder = RequestRecorder { _ in
@@ -542,6 +680,21 @@ private func sampleRequest(shippedInVersion: Any = NSNull()) -> [String: Any] {
         "status": "Planned",
         "voted": true,
         "updatedAt": "2026-07-16T12:00:00.000Z",
+        "shippedInVersion": shippedInVersion,
+    ]
+}
+
+private func sampleMyRequest(
+    id: String = "FDBK-my-request",
+    status: String = "Planned",
+    shippedInVersion: Any = NSNull()
+) -> [String: Any] {
+    [
+        "id": id,
+        "title": "Training complications",
+        "status": status,
+        "createdAt": "2026-07-16T12:00:00.000Z",
+        "voteCount": 3,
         "shippedInVersion": shippedInVersion,
     ]
 }

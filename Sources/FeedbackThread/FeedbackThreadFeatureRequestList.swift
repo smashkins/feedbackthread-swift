@@ -408,6 +408,7 @@ private struct FeatureRequestStatusBadge: View {
 
     private var color: Color {
         switch status.feedbackThreadRequestStage {
+        case .pendingReview: .orange
         case .inReview: .cyan
         case .planned: .purple
         case .inProgress: .blue

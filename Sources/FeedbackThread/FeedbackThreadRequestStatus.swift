@@ -6,6 +6,9 @@ import Foundation
 /// than dropped, so a status added on the server later doesn't silently hide
 /// cards from a board built against an older SDK.
 enum FeedbackThreadRequestStage: Equatable, Sendable {
+    /// Submitted, not yet moderated - only ever seen by the reporter (see
+    /// FeedbackThreadClient.myRequests), never on the public board.
+    case pendingReview
     case inReview
     case planned
     case inProgress
@@ -17,6 +20,7 @@ extension String {
     /// Maps a raw feature-request status string to its public board stage.
     var feedbackThreadRequestStage: FeedbackThreadRequestStage {
         switch self {
+        case "Submitted": .pendingReview
         case "Under review", "In review": .inReview
         case "Planned": .planned
         case "In progress", "Ready to release": .inProgress
@@ -29,6 +33,7 @@ extension String {
     /// the raw status sensibly capitalized when the stage isn't recognized.
     var feedbackThreadRequestLabel: String {
         switch feedbackThreadRequestStage {
+        case .pendingReview: "Waiting for review"
         case .inReview: "In review"
         case .planned: "Planned"
         case .inProgress: "In progress"

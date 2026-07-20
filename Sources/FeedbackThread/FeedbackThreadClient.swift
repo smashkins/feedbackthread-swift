@@ -119,6 +119,38 @@ public struct FeedbackThreadFeatureRequest: Decodable, Equatable, Identifiable, 
     public let shippedInVersion: String?
 }
 
+/// One of the caller's own feature-request cards, as returned by
+/// `FeedbackThreadClient.myRequests`. Unlike `FeedbackThreadFeatureRequest`,
+/// this includes cards still in the private "Submitted" status - it's scoped
+/// to the presented identity, not to what the public board shows.
+public struct FeedbackThreadMyRequest: Decodable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let status: String
+    public let createdAt: String
+    public let voteCount: Int
+    public let shippedInVersion: String?
+}
+
+/// A shipped card of the caller's own that hasn't been acknowledged yet (see
+/// `FeedbackThreadClient.myUpdates`/`acknowledgeUpdates`).
+public struct FeedbackThreadMyUpdate: Decodable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let shippedVersion: String
+    public let publishedAt: String
+}
+
+public struct FeedbackThreadMyUpdatesResult: Decodable, Equatable, Sendable {
+    public let updates: [FeedbackThreadMyUpdate]
+    public let unreadCount: Int
+
+    public init(updates: [FeedbackThreadMyUpdate], unreadCount: Int) {
+        self.updates = updates
+        self.unreadCount = unreadCount
+    }
+}
+
 public struct FeedbackThreadConfiguration: Equatable, Sendable {
     public var baseURL: URL
     public var projectKey: String
@@ -178,10 +210,19 @@ public struct FeedbackThreadClient: Sendable {
         _ externalUserID: String,
         _ customerTier: FeedbackThreadCustomerTier?
     ) async throws -> FeedbackThreadVoteResult
+    public typealias MyRequestsHandler = @Sendable (_ externalUserID: String) async throws -> [FeedbackThreadMyRequest]
+    public typealias MyUpdatesHandler = @Sendable (_ externalUserID: String) async throws -> FeedbackThreadMyUpdatesResult
+    public typealias AcknowledgeUpdatesHandler = @Sendable (
+        _ ids: [String],
+        _ externalUserID: String
+    ) async throws -> Int
 
     private let submissionHandler: SubmissionHandler
     private let requestListHandler: RequestListHandler
     private let voteHandler: VoteHandler
+    private let myRequestsHandler: MyRequestsHandler
+    private let myUpdatesHandler: MyUpdatesHandler
+    private let acknowledgeUpdatesHandler: AcknowledgeUpdatesHandler
 
     public init(
         configuration: FeedbackThreadConfiguration,
@@ -202,6 +243,15 @@ public struct FeedbackThreadClient: Sendable {
                 customerTier: customerTier
             )
         }
+        myRequestsHandler = { externalUserID in
+            try await transport.myRequests(externalUserID: externalUserID)
+        }
+        myUpdatesHandler = { externalUserID in
+            try await transport.myUpdates(externalUserID: externalUserID)
+        }
+        acknowledgeUpdatesHandler = { ids, externalUserID in
+            try await transport.acknowledgeUpdates(ids: ids, externalUserID: externalUserID)
+        }
     }
 
     public init(submit: @escaping SubmissionHandler) {
@@ -210,16 +260,29 @@ public struct FeedbackThreadClient: Sendable {
         voteHandler = { _, _, _, _ in
             throw FeedbackThreadError.invalidConfiguration("This FeedbackThread client does not support voting.")
         }
+        myRequestsHandler = { _ in [] }
+        myUpdatesHandler = { _ in FeedbackThreadMyUpdatesResult(updates: [], unreadCount: 0) }
+        acknowledgeUpdatesHandler = { _, _ in
+            throw FeedbackThreadError.invalidConfiguration("This FeedbackThread client does not support acknowledging updates.")
+        }
     }
 
     public init(
         submit: @escaping SubmissionHandler,
         requests: @escaping RequestListHandler,
-        setVote: @escaping VoteHandler
+        setVote: @escaping VoteHandler,
+        myRequests: @escaping MyRequestsHandler = { _ in [] },
+        myUpdates: @escaping MyUpdatesHandler = { _ in FeedbackThreadMyUpdatesResult(updates: [], unreadCount: 0) },
+        acknowledgeUpdates: @escaping AcknowledgeUpdatesHandler = { _, _ in
+            throw FeedbackThreadError.invalidConfiguration("This FeedbackThread client does not support acknowledging updates.")
+        }
     ) {
         submissionHandler = submit
         requestListHandler = requests
         voteHandler = setVote
+        myRequestsHandler = myRequests
+        myUpdatesHandler = myUpdates
+        acknowledgeUpdatesHandler = acknowledgeUpdates
     }
 
     @discardableResult
@@ -242,6 +305,28 @@ public struct FeedbackThreadClient: Sendable {
         customerTier: FeedbackThreadCustomerTier? = nil
     ) async throws -> FeedbackThreadVoteResult {
         try await voteHandler(requestID, voted, externalUserID, customerTier)
+    }
+
+    /// Every card `externalUserID` reported in the project, including ones
+    /// still in the private "Submitted" status - closing the loop on the
+    /// reporter's own backlog rather than only the public board.
+    public func myRequests(externalUserID: String) async throws -> [FeedbackThreadMyRequest] {
+        try await myRequestsHandler(externalUserID)
+    }
+
+    /// Shipped cards of `externalUserID`'s own that haven't been
+    /// acknowledged yet. Pair with ``acknowledgeUpdates(ids:externalUserID:)``
+    /// once the caller has shown them to the user.
+    public func myUpdates(externalUserID: String) async throws -> FeedbackThreadMyUpdatesResult {
+        try await myUpdatesHandler(externalUserID)
+    }
+
+    /// Marks the given shipped cards as seen for `externalUserID`. Idempotent
+    /// - acknowledging an already-acknowledged id is a no-op. Returns the
+    /// unread count after the write so a badge can update immediately.
+    @discardableResult
+    public func acknowledgeUpdates(ids: [String], externalUserID: String) async throws -> Int {
+        try await acknowledgeUpdatesHandler(ids, externalUserID)
     }
 }
 
@@ -370,6 +455,75 @@ private final class FeedbackThreadHTTPTransport: @unchecked Sendable {
         return result
     }
 
+    func myRequests(externalUserID: String) async throws -> [FeedbackThreadMyRequest] {
+        guard let userID = normalizedUserID(externalUserID) else {
+            throw FeedbackThreadError.invalidConfiguration("A stable user ID is required for my requests.")
+        }
+        let endpoint = try projectEndpoint()
+            .appendingPathComponent("my")
+            .appendingPathComponent("requests")
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.timeoutInterval = configuration.requestTimeout
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(userID, forHTTPHeaderField: "X-FeedbackThread-User")
+
+        let data = try await responseData(for: request)
+        guard let envelope = try? decoder.decode(FeedbackThreadMyRequestsEnvelope.self, from: data) else {
+            throw FeedbackThreadError.invalidResponse
+        }
+        return envelope.requests
+    }
+
+    func myUpdates(externalUserID: String) async throws -> FeedbackThreadMyUpdatesResult {
+        guard let userID = normalizedUserID(externalUserID) else {
+            throw FeedbackThreadError.invalidConfiguration("A stable user ID is required for my updates.")
+        }
+        let endpoint = try projectEndpoint()
+            .appendingPathComponent("my")
+            .appendingPathComponent("updates")
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.timeoutInterval = configuration.requestTimeout
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(userID, forHTTPHeaderField: "X-FeedbackThread-User")
+
+        let data = try await responseData(for: request)
+        guard let result = try? decoder.decode(FeedbackThreadMyUpdatesResult.self, from: data) else {
+            throw FeedbackThreadError.invalidResponse
+        }
+        return result
+    }
+
+    func acknowledgeUpdates(ids: [String], externalUserID: String) async throws -> Int {
+        guard let userID = normalizedUserID(externalUserID) else {
+            throw FeedbackThreadError.invalidConfiguration("A stable user ID is required to acknowledge updates.")
+        }
+        guard !ids.isEmpty else {
+            throw FeedbackThreadError.invalidConfiguration("At least one feedback ID is required to acknowledge updates.")
+        }
+        let endpoint = try projectEndpoint()
+            .appendingPathComponent("my")
+            .appendingPathComponent("updates")
+            .appendingPathComponent("ack")
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = configuration.requestTimeout
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(userID, forHTTPHeaderField: "X-FeedbackThread-User")
+        request.httpBody = try encoder.encode(FeedbackThreadAckPayload(feedbackIds: ids))
+
+        let data = try await responseData(for: request)
+        guard let result = try? decoder.decode(FeedbackThreadAckResult.self, from: data) else {
+            throw FeedbackThreadError.invalidResponse
+        }
+        return result.unreadCount
+    }
+
     private func projectEndpoint() throws -> URL {
         let projectKey = configuration.projectKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !projectKey.isEmpty else {
@@ -442,6 +596,18 @@ private struct FeedbackThreadFeedbackEnvelope: Decodable {
 
 private struct FeedbackThreadRequestsEnvelope: Decodable {
     let requests: [FeedbackThreadFeatureRequest]
+}
+
+private struct FeedbackThreadMyRequestsEnvelope: Decodable {
+    let requests: [FeedbackThreadMyRequest]
+}
+
+private struct FeedbackThreadAckPayload: Encodable {
+    let feedbackIds: [String]
+}
+
+private struct FeedbackThreadAckResult: Decodable {
+    let unreadCount: Int
 }
 
 private struct FeedbackThreadErrorEnvelope: Decodable {

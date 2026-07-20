@@ -125,6 +125,9 @@ public struct FeedbackThreadConfiguration: Equatable, Sendable {
     public var source: String
     public var requestTimeout: TimeInterval
 
+    /// Hosts that are trusted to be reached over plain HTTP (local development only).
+    private static let loopbackHosts: Set<String> = ["localhost", "127.0.0.1", "::1"]
+
     public init(
         baseURL: URL,
         projectKey: String,
@@ -133,6 +136,14 @@ public struct FeedbackThreadConfiguration: Equatable, Sendable {
     ) throws {
         guard let scheme = baseURL.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
             throw FeedbackThreadError.invalidConfiguration("The FeedbackThread base URL must use HTTP or HTTPS.")
+        }
+        if scheme == "http" {
+            let host = baseURL.host?.lowercased() ?? ""
+            guard Self.loopbackHosts.contains(host) else {
+                throw FeedbackThreadError.invalidConfiguration(
+                    "The FeedbackThread base URL must use HTTPS unless it points at localhost."
+                )
+            }
         }
         self.baseURL = baseURL
         self.projectKey = projectKey

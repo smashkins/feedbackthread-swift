@@ -11,6 +11,7 @@ public struct FeedbackThreadFeedbackForm: View {
 
     private struct PendingSubmission: Equatable, Identifiable, Sendable {
         let id: String
+        let idempotencyKey: String
         let submission: FeedbackThreadFeedbackSubmission
     }
 
@@ -19,6 +20,7 @@ public struct FeedbackThreadFeedbackForm: View {
     private let client: FeedbackThreadClient
     private let appVersion: String?
     private let externalUserID: String?
+    private let customerTierProvider: (() -> FeedbackThreadCustomerTier?)?
     private let onSubmitted: @MainActor @Sendable (FeedbackThreadFeedback) -> Void
 
     @State private var kind: FeedbackThreadFeedbackKind = .request
@@ -26,16 +28,19 @@ public struct FeedbackThreadFeedbackForm: View {
     @State private var message = ""
     @State private var phase: SubmissionPhase = .editing
     @State private var pendingSubmission: PendingSubmission?
+    @State private var resubmissionKey = FeedbackThreadResubmissionKey()
 
     public init(
         client: FeedbackThreadClient,
         appVersion: String? = nil,
         externalUserID: String? = nil,
+        customerTierProvider: (() -> FeedbackThreadCustomerTier?)? = nil,
         onSubmitted: @escaping @MainActor @Sendable (FeedbackThreadFeedback) -> Void = { _ in }
     ) {
         self.client = client
         self.appVersion = appVersion
         self.externalUserID = externalUserID
+        self.customerTierProvider = customerTierProvider
         self.onSubmitted = onSubmitted
     }
 
@@ -52,10 +57,12 @@ public struct FeedbackThreadFeedbackForm: View {
 
                     TextField("Short title", text: $title)
                         .textInputAutocapitalization(.sentences)
+                        .onChange(of: title) { _ in resubmissionKey.contentChanged() }
 
                     TextEditor(text: $message)
                         .frame(minHeight: 120)
                         .accessibilityLabel("Feedback details")
+                        .onChange(of: message) { _ in resubmissionKey.contentChanged() }
                 } header: {
                     Text("What would you like to share?")
                 }
@@ -117,15 +124,19 @@ public struct FeedbackThreadFeedbackForm: View {
 
     private func beginSubmission() {
         guard canSubmit else { return }
-        let idempotencyKey = UUID().uuidString
+        // Reused across retries of the same content so a network failure followed
+        // by tapping Send again can't create a duplicate submission server-side.
+        let idempotencyKey = resubmissionKey.beginAttempt()
         pendingSubmission = PendingSubmission(
-            id: idempotencyKey,
+            id: UUID().uuidString,
+            idempotencyKey: idempotencyKey,
             submission: FeedbackThreadFeedbackSubmission(
                 kind: kind,
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 text: message.trimmingCharacters(in: .whitespacesAndNewlines),
                 appVersion: appVersion,
-                externalUserID: externalUserID
+                externalUserID: externalUserID,
+                customerTier: customerTierProvider?()
             )
         )
         phase = .submitting
@@ -134,9 +145,10 @@ public struct FeedbackThreadFeedbackForm: View {
     @MainActor
     private func submit(_ pending: PendingSubmission) async {
         do {
-            let feedback = try await client.submit(pending.submission, idempotencyKey: pending.id)
+            let feedback = try await client.submit(pending.submission, idempotencyKey: pending.idempotencyKey)
             guard !Task.isCancelled else { return }
             phase = .sent
+            resubmissionKey.submissionSucceeded()
             onSubmitted(feedback)
         } catch is CancellationError {
             return

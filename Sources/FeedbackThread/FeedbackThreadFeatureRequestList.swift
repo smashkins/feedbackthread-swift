@@ -39,11 +39,13 @@ public struct FeedbackThreadFeatureRequestList: View {
 
         func includes(_ status: String) -> Bool {
             switch self {
-            case .all: status.publicRequestStage != nil
-            case .inReview: status.publicRequestStage == .inReview
-            case .planned: status.publicRequestStage == .planned
-            case .inProgress: status.publicRequestStage == .inProgress
-            case .completed: status.publicRequestStage == .completed
+            // Unknown statuses are included under "All" rather than dropped, so a
+            // status the SDK doesn't recognize yet doesn't silently hide cards.
+            case .all: true
+            case .inReview: status.feedbackThreadRequestStage == .inReview
+            case .planned: status.feedbackThreadRequestStage == .planned
+            case .inProgress: status.feedbackThreadRequestStage == .inProgress
+            case .completed: status.feedbackThreadRequestStage == .completed
             }
         }
     }
@@ -51,6 +53,7 @@ public struct FeedbackThreadFeatureRequestList: View {
     private let client: FeedbackThreadClient
     private let appVersion: String?
     private let externalUserID: String?
+    private let customerTierProvider: (() -> FeedbackThreadCustomerTier?)?
     private let onDismiss: (() -> Void)?
 
     @AppStorage("com.feedbackthread.sdk.voter-id") private var storedVoterID = ""
@@ -59,16 +62,19 @@ public struct FeedbackThreadFeatureRequestList: View {
     @State private var votingIDs: Set<String> = []
     @State private var activeSheet: ActiveSheet?
     @State private var selectedFilter: RequestFilter = .all
+    @State private var voteErrorMessage: String?
 
     public init(
         client: FeedbackThreadClient,
         appVersion: String? = nil,
         externalUserID: String? = nil,
+        customerTierProvider: (() -> FeedbackThreadCustomerTier?)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
         self.client = client
         self.appVersion = appVersion
         self.externalUserID = externalUserID
+        self.customerTierProvider = customerTierProvider
         self.onDismiss = onDismiss
     }
 
@@ -114,6 +120,7 @@ public struct FeedbackThreadFeatureRequestList: View {
                 client: client,
                 appVersion: appVersion,
                 externalUserID: voterID,
+                customerTierProvider: customerTierProvider,
                 onSubmitted: { _ in
                     Task { await load() }
                 }
@@ -136,25 +143,35 @@ public struct FeedbackThreadFeatureRequestList: View {
                 action: { Task { await load() } }
             )
         default:
-            List(filteredRequests) { request in
-                FeatureRequestRow(
-                    request: request,
-                    isVoting: votingIDs.contains(request.id),
-                    onVote: { toggleVote(request) }
-                )
-                .listRowInsets(.init(top: 12, leading: 16, bottom: 12, trailing: 16))
-            }
-            .listStyle(.plain)
-            .overlay {
-                if filteredRequests.isEmpty {
-                    FeatureRequestMessage(
-                        title: requests.isEmpty ? "No feature requests yet" : "No \(selectedFilter.title.lowercased()) requests",
-                        message: requests.isEmpty ? "Be the first to share an idea." : "Choose another status to see more requests.",
-                        systemImage: requests.isEmpty ? "lightbulb" : "line.3.horizontal.decrease.circle"
-                    )
+            VStack(spacing: 0) {
+                if let voteErrorMessage {
+                    Label(voteErrorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                 }
+                List(filteredRequests) { request in
+                    FeatureRequestRow(
+                        request: request,
+                        isVoting: votingIDs.contains(request.id),
+                        onVote: { toggleVote(request) }
+                    )
+                    .listRowInsets(.init(top: 12, leading: 16, bottom: 12, trailing: 16))
+                }
+                .listStyle(.plain)
+                .overlay {
+                    if filteredRequests.isEmpty {
+                        FeatureRequestMessage(
+                            title: requests.isEmpty ? "No feature requests yet" : "No \(selectedFilter.title.lowercased()) requests",
+                            message: requests.isEmpty ? "Be the first to share an idea." : "Choose another status to see more requests.",
+                            systemImage: requests.isEmpty ? "lightbulb" : "line.3.horizontal.decrease.circle"
+                        )
+                    }
+                }
+                .refreshable { await load() }
             }
-            .refreshable { await load() }
         }
     }
 
@@ -179,6 +196,7 @@ public struct FeedbackThreadFeatureRequestList: View {
                 FeatureRequestDetail(
                     request: request,
                     isVoting: votingIDs.contains(request.id),
+                    errorMessage: voteErrorMessage,
                     onVote: { toggleVote(request) }
                 )
             } else {
@@ -214,13 +232,15 @@ public struct FeedbackThreadFeatureRequestList: View {
     private func toggleVote(_ request: FeedbackThreadFeatureRequest) {
         guard !votingIDs.contains(request.id) else { return }
         votingIDs.insert(request.id)
+        voteErrorMessage = nil
         Task {
             defer { votingIDs.remove(request.id) }
             do {
                 let result = try await client.setVote(
                     for: request.id,
                     voted: !request.voted,
-                    externalUserID: voterID
+                    externalUserID: voterID,
+                    customerTier: customerTierProvider?()
                 )
                 guard let index = requests.firstIndex(where: { $0.id == request.id }) else { return }
                 let current = requests[index]
@@ -236,7 +256,10 @@ public struct FeedbackThreadFeatureRequestList: View {
                     shippedInVersion: current.shippedInVersion
                 )
             } catch {
-                loadState = .failed(error.localizedDescription)
+                // The list only ever applies a vote change once the server confirms
+                // it, so there's no optimistic state to roll back here — but the
+                // failure still needs to be visible even when the list isn't empty.
+                voteErrorMessage = error.localizedDescription
             }
         }
     }
@@ -318,6 +341,7 @@ private struct FeatureRequestRow: View {
 private struct FeatureRequestDetail: View {
     let request: FeedbackThreadFeatureRequest
     let isVoting: Bool
+    var errorMessage: String?
     let onVote: () -> Void
 
     var body: some View {
@@ -350,6 +374,12 @@ private struct FeatureRequestDetail: View {
                     }
                 }
 
+                if let errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+
                 Divider()
 
                 Text(request.description)
@@ -368,7 +398,7 @@ private struct FeatureRequestStatusBadge: View {
     let status: String
 
     var body: some View {
-        Text(status.publicRequestLabel)
+        Text(status.feedbackThreadRequestLabel)
             .font(.caption.weight(.medium))
             .foregroundStyle(color)
             .padding(.horizontal, 7)
@@ -377,12 +407,12 @@ private struct FeatureRequestStatusBadge: View {
     }
 
     private var color: Color {
-        switch status.publicRequestStage {
+        switch status.feedbackThreadRequestStage {
         case .inReview: .cyan
         case .planned: .purple
         case .inProgress: .blue
         case .completed: .green
-        case nil: .secondary
+        case .unknown: .secondary
         }
     }
 }
@@ -437,35 +467,6 @@ private struct FeatureRequestVoteButton: View {
 
     private var backgroundColor: Color {
         isVoted ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08)
-    }
-}
-
-private enum PublicRequestStage {
-    case inReview
-    case planned
-    case inProgress
-    case completed
-}
-
-private extension String {
-    var publicRequestStage: PublicRequestStage? {
-        switch self {
-        case "Under review", "In review": .inReview
-        case "Planned": .planned
-        case "In progress", "Ready to release": .inProgress
-        case "Released": .completed
-        default: nil
-        }
-    }
-
-    var publicRequestLabel: String {
-        switch publicRequestStage {
-        case .inReview: "In review"
-        case .planned: "Planned"
-        case .inProgress: "In progress"
-        case .completed: "Completed"
-        case nil: self
-        }
     }
 }
 

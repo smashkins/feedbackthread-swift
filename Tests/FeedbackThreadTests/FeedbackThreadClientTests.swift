@@ -371,6 +371,42 @@ struct FeedbackThreadClientTests {
         }
     }
 
+    @Test("Accepts an HTTPS base URL for any host")
+    func acceptsHTTPSForAnyHost() throws {
+        let configuration = try FeedbackThreadConfiguration(
+            baseURL: URL(string: "https://example.com")!,
+            projectKey: "project-key",
+            source: "ios"
+        )
+        #expect(configuration.baseURL.absoluteString == "https://example.com")
+    }
+
+    @Test(
+        "Accepts a plain HTTP base URL only when it points at a loopback host",
+        arguments: ["http://localhost:8787", "http://127.0.0.1:8787", "http://[::1]:8787"]
+    )
+    func acceptsHTTPForLoopbackHosts(urlString: String) throws {
+        let configuration = try FeedbackThreadConfiguration(
+            baseURL: URL(string: urlString)!,
+            projectKey: "project-key",
+            source: "ios"
+        )
+        #expect(configuration.baseURL.absoluteString == urlString)
+    }
+
+    @Test("Rejects a plain HTTP base URL for any non-loopback host")
+    func rejectsHTTPForNonLoopbackHosts() {
+        #expect(throws: FeedbackThreadError.invalidConfiguration(
+            "The FeedbackThread base URL must use HTTPS unless it points at localhost."
+        )) {
+            _ = try FeedbackThreadConfiguration(
+                baseURL: URL(string: "http://example.com")!,
+                projectKey: "project-key",
+                source: "ios"
+            )
+        }
+    }
+
     @Test("Defaults the request timeout to 30 seconds")
     func defaultsRequestTimeout() throws {
         let configuration = try FeedbackThreadConfiguration(

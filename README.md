@@ -4,17 +4,17 @@ This package provides the first app-side test integration for iOS 16+ and macOS 
 
 ## Add the package
 
-GitHub plus Swift Package Manager is the standard low-friction distribution path for an iOS SDK. In Xcode, choose **File → Add Package Dependencies…** and enter:
+The SDK is distributed as a standalone Swift package, published from this monorepo via `scripts/publish-swift-sdk.sh`. In Xcode, choose **File → Add Package Dependencies…** and enter:
 
 ```text
-https://github.com/aivars/loopline.git
+https://github.com/aivars/feedbackthread-swift.git
 ```
 
-Select the `FeedbackThread` library product. During the closed beta, use the current beta branch or an exact beta tag supplied with the tester invitation. Once `0.1.0` exists, use **Up to Next Major Version** starting at `0.1.0`. Do not use an unbounded `main` dependency in a released app.
+Select the `FeedbackThread` library product with **Up to Next Major Version** starting at `0.2.0`. Do not use an unbounded `main` dependency in a released app. (The mirror repository is private during the closed beta; it flips public when the beta opens.)
 
-For local development, choose **File → Add Package Dependencies… → Add Local…**, select this repository root, and select the `FeedbackThread` product. The deprecated `Loopline` product remains temporarily available for source compatibility.
+For local development inside this monorepo, choose **File → Add Package Dependencies… → Add Local…** and select either the repository root or `sdk/swift` — both expose the `FeedbackThread` product. The deprecated `Loopline` product remains temporarily available for source compatibility and is removed in 0.3.0.
 
-The repository is not tagged or published by this document change; creating the first beta tag is a separate release action.
+After changing SDK code, republish the mirror with `scripts/publish-swift-sdk.sh <version>`.
 
 ### Migrating from the `Loopline`-prefixed API (0.1.x → 0.2.0)
 

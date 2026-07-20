@@ -11,7 +11,7 @@ Native in-app feedback for iOS: a drop-in feature-request board with voting, a f
 - ✍️ **Feedback form** — bug reports and feature requests straight into your triage inbox
 - 🚀 **Close the loop** — requests attached to a published release automatically show a *Shipped in x.y.z* badge to the people who asked
 - 💎 **Paying-customer signal** — optionally tag submissions and votes with your paywall state so you can prioritize by revenue
-- 🔒 **Privacy-first** — no emails or personal data collected; anonymous voter IDs stay on-device
+- 🔒 **Privacy-first** — no email or name is required; you control whether to pass an external user identifier; anonymous voter IDs stay on-device
 - 🪶 **Zero dependencies** — a small async/await client over `URLSession`, SwiftUI views, nothing else
 
 ## Requirements
@@ -51,7 +51,7 @@ let feedbackThread = FeedbackThreadClient(
 .sheet(isPresented: $showRequests) {
     FeedbackThreadFeatureRequestList(
         client: feedbackThread,
-        appVersion: Bundle.main.shortVersionString,
+        appVersion: (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown",
         externalUserID: signedInUserID   // optional; anonymous ID used otherwise
     )
 }
@@ -65,7 +65,7 @@ Users see approved requests, filter by status (In review · Planned · In progre
 .sheet(isPresented: $showFeedback) {
     FeedbackThreadFeedbackForm(
         client: feedbackThread,
-        appVersion: Bundle.main.shortVersionString
+        appVersion: (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
     )
 }
 ```

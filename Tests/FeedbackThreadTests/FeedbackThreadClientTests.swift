@@ -402,34 +402,13 @@ struct FeedbackThreadClientTests {
         )
     }
 
-    @Test("Deprecated Loopline-prefixed aliases still resolve to the FeedbackThread types (compat window, removed in 0.3.0)")
-    func deprecatedLooplineAliasesRemainUsable() async throws {
-        let recorder = RequestRecorder { _ in
-            try response(statusCode: 201, json: ["feedback": sampleFeedback()])
-        }
-        let legacyClient: LooplineClient = LooplineClient(
-            configuration: try LooplineConfiguration(
-                baseURL: URL(string: "https://example.com")!,
-                projectKey: "project-key",
-                source: "ios"
-            ),
-            session: recorder.session
-        )
-
-        let feedback: LooplineFeedback = try await legacyClient.submit(
-            LooplineFeedbackSubmission(kind: .bug, title: "Crash", text: "It crashed.")
-        )
-
-        #expect(feedback.status == "Submitted")
-    }
-
     @Test("Submits through the live staging service when configured")
     func liveSubmission() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard
-            let baseURLString = environment["FEEDBACKTHREAD_LIVE_BASE_URL"] ?? environment["LOOPLINE_LIVE_BASE_URL"],
+            let baseURLString = environment["FEEDBACKTHREAD_LIVE_BASE_URL"],
             let baseURL = URL(string: baseURLString),
-            let projectKey = environment["FEEDBACKTHREAD_LIVE_PROJECT_KEY"] ?? environment["LOOPLINE_LIVE_PROJECT_KEY"]
+            let projectKey = environment["FEEDBACKTHREAD_LIVE_PROJECT_KEY"]
         else {
             return
         }

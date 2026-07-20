@@ -53,10 +53,6 @@ public struct FeedbackThreadFeatureRequestList: View {
     private let externalUserID: String?
     private let onDismiss: (() -> Void)?
 
-    /// Legacy key used before the SDK's FeedbackThread rename. Read as a migration
-    /// fallback so existing installs keep their anonymous voter identity.
-    private static let legacyVoterIDKey = "com.loopline.sdk.voter-id"
-
     @AppStorage("com.feedbackthread.sdk.voter-id") private var storedVoterID = ""
     @State private var requests: [FeedbackThreadFeatureRequest] = []
     @State private var loadState: LoadState = .loading
@@ -197,12 +193,7 @@ public struct FeedbackThreadFeatureRequestList: View {
 
     private func ensureVoterID() {
         guard voterID.isEmpty else { return }
-        if let legacyVoterID = UserDefaults.standard.string(forKey: Self.legacyVoterIDKey),
-           !legacyVoterID.isEmpty {
-            storedVoterID = legacyVoterID
-        } else {
-            storedVoterID = UUID().uuidString
-        }
+        storedVoterID = UUID().uuidString
     }
 
     @MainActor

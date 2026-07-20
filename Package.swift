@@ -15,22 +15,16 @@ let package = Package(
     ],
     products: [
         .library(name: "FeedbackThread", targets: ["FeedbackThread"]),
-        .library(name: "Loopline", targets: ["Loopline"]),
     ],
     targets: [
         .target(
             name: "FeedbackThread",
             path: "Sources/FeedbackThread"
         ),
-        .target(
-            name: "Loopline",
-            dependencies: ["FeedbackThread"],
-            path: "Sources/LooplineCompatibility"
-        ),
         .testTarget(
             name: "FeedbackThreadTests",
             dependencies: ["FeedbackThread"],
-            path: "Tests/LooplineTests"
+            path: "Tests/FeedbackThreadTests"
         ),
     ]
 )

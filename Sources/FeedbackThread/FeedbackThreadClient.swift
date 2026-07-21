@@ -125,6 +125,52 @@ public struct FeedbackThreadFeatureRequest: Decodable, Equatable, Identifiable, 
     public let voted: Bool
     public let updatedAt: String
     public let shippedInVersion: String?
+
+    /// Explicit initializer with defaults for later-added fields, so adding
+    /// an optional column never breaks call sites (Swift toolchains disagree
+    /// on whether a synthesized memberwise init defaults optional lets —
+    /// the 0.3.6/0.3.7 consumer compile breaks came from exactly that).
+    public init(
+        id: String,
+        title: String,
+        kind: FeedbackThreadFeedbackKind? = nil,
+        description: String,
+        votes: Int,
+        target: FeedbackThreadRequestTarget,
+        status: String,
+        voted: Bool,
+        updatedAt: String,
+        shippedInVersion: String?
+    ) {
+        self.id = id
+        self.title = title
+        self.kind = kind
+        self.description = description
+        self.votes = votes
+        self.target = target
+        self.status = status
+        self.voted = voted
+        self.updatedAt = updatedAt
+        self.shippedInVersion = shippedInVersion
+    }
+
+    /// The same request with a confirmed vote result applied - preserves
+    /// every other field (the hand-rolled copy this replaces silently
+    /// dropped `kind` on one Swift seed and failed to compile on another).
+    public func updatingVote(voted: Bool, votes: Int) -> FeedbackThreadFeatureRequest {
+        FeedbackThreadFeatureRequest(
+            id: id,
+            title: title,
+            kind: kind,
+            description: description,
+            votes: votes,
+            target: target,
+            status: status,
+            voted: voted,
+            updatedAt: updatedAt,
+            shippedInVersion: shippedInVersion
+        )
+    }
 }
 
 /// One of the caller's own feature-request cards, as returned by

@@ -59,3 +59,44 @@ struct FeedbackThreadRequestStatusTests {
         #expect(stage.feedbackThreadMyRequestsSection == section)
     }
 }
+
+@Suite("FeedbackThreadFeatureRequest vote updates")
+struct FeatureRequestVoteUpdateTests {
+    @Test("updatingVote preserves every field, kind included")
+    func preservesKind() {
+        let bug = FeedbackThreadFeatureRequest(
+            id: "FDBK-1",
+            title: "Crash on rotate",
+            kind: .bug,
+            description: "Known issue.",
+            votes: 2,
+            target: .ios,
+            status: "In review",
+            voted: false,
+            updatedAt: "2026-07-21T00:00:00.000Z",
+            shippedInVersion: nil
+        )
+        let updated = bug.updatingVote(voted: true, votes: 3)
+        #expect(updated.kind == .bug)
+        #expect(updated.voted == true)
+        #expect(updated.votes == 3)
+        #expect(updated.title == bug.title)
+        #expect(updated.status == bug.status)
+    }
+
+    @Test("initializer defaults kind to nil for older call sites")
+    func kindDefaults() {
+        let request = FeedbackThreadFeatureRequest(
+            id: "FDBK-2",
+            title: "No kind supplied",
+            description: "Pre-0.3.6 shape.",
+            votes: 0,
+            target: .ios,
+            status: "Planned",
+            voted: false,
+            updatedAt: "2026-07-21T00:00:00.000Z",
+            shippedInVersion: nil
+        )
+        #expect(request.kind == nil)
+    }
+}

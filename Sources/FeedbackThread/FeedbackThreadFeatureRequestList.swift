@@ -330,18 +330,7 @@ public struct FeedbackThreadFeatureRequestList: View {
                     customerTier: customerTierProvider?()
                 )
                 guard let index = requests.firstIndex(where: { $0.id == request.id }) else { return }
-                let current = requests[index]
-                requests[index] = FeedbackThreadFeatureRequest(
-                    id: current.id,
-                    title: current.title,
-                    description: current.description,
-                    votes: result.votes,
-                    target: current.target,
-                    status: current.status,
-                    voted: result.voted,
-                    updatedAt: current.updatedAt,
-                    shippedInVersion: current.shippedInVersion
-                )
+                requests[index] = requests[index].updatingVote(voted: result.voted, votes: result.votes)
             } catch {
                 // The list only ever applies a vote change once the server confirms
                 // it, so there's no optimistic state to roll back here — but the

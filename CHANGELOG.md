@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.7
+
+- Fixes 0.3.6 failing to compile in consumer apps: three preview fixtures were missing the new `kind` argument (one now previews the Bug tag). The release pipeline gained a mandatory clean iOS-simulator build so a macOS-only `swift test` pass can never ship iOS-gated breakage again. Thanks to the integration report that caught it.
+
+
 ## 0.3.6
 
 One entry point, and bugs join the board.

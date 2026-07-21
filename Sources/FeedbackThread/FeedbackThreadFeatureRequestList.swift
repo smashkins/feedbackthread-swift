@@ -622,6 +622,7 @@ private struct FeedbackThreadFeatureRequestListPreviews: PreviewProvider {
         FeedbackThreadFeatureRequest(
             id: "FDBK-1",
             title: "Breathing reminders",
+            kind: .request,
             description: "Remind me when it is time to practice.",
             votes: 34,
             target: .ios,
@@ -633,6 +634,7 @@ private struct FeedbackThreadFeatureRequestListPreviews: PreviewProvider {
         FeedbackThreadFeatureRequest(
             id: "FDBK-2",
             title: "Training complications",
+            kind: .bug,
             description: "Show the next practice on my watch face.",
             votes: 12,
             target: .watchOS,
@@ -644,6 +646,7 @@ private struct FeedbackThreadFeatureRequestListPreviews: PreviewProvider {
         FeedbackThreadFeatureRequest(
             id: "FDBK-3",
             title: "Health integration",
+            kind: .request,
             description: "Include completed breathing sessions in Health.",
             votes: 9,
             target: .ios,

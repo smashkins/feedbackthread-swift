@@ -80,36 +80,23 @@ public struct FeedbackThreadFeatureRequestList: View {
 
     public var body: some View {
         NavigationStack {
-            content
-                .navigationTitle("Feature requests")
-                .navigationBarTitleDisplayMode(.inline)
-                .navigationDestination(for: FeatureRequestRoute.self, destination: requestDestination)
-                .toolbar {
-                    ToolbarTitleMenu {
-                        ForEach(RequestFilter.allCases) { filter in
-                            Button {
-                                selectedFilter = filter
-                            } label: {
-                                Label(
-                                    "\(filter.title) (\(requestCount(for: filter)))",
-                                    systemImage: selectedFilter == filter ? "checkmark" : "circle"
-                                )
-                            }
-                        }
-                    }
-                    if let onDismiss {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done", action: onDismiss)
-                        }
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            activeSheet = .submit
-                        } label: {
-                            Label("Add request", systemImage: "plus")
-                        }
+            VStack(spacing: 0) {
+                filterChipRow
+                content
+            }
+            .navigationTitle("Feature requests")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: FeatureRequestRoute.self, destination: requestDestination)
+            .toolbar {
+                if let onDismiss {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done", action: onDismiss)
                     }
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                addRequestButton
+            }
         }
         .task {
             ensureVoterID()
@@ -125,6 +112,46 @@ public struct FeedbackThreadFeatureRequestList: View {
                     Task { await load() }
                 }
             )
+        }
+    }
+
+    // Pinned in the thumb zone rather than tucked into the top-trailing
+    // toolbar, matching the mobile pattern where the primary action stays
+    // reachable with one hand. The bar material keeps list content that
+    // scrolls beneath it legible.
+    private var addRequestButton: some View {
+        Button {
+            activeSheet = .submit
+        } label: {
+            Text("Suggest a feature")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(.bar)
+    }
+
+    // Filters are always-visible chips under the nav bar instead of hiding
+    // behind a title-menu chevron, so the current status filter and its
+    // count are legible at a glance.
+    private var filterChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(RequestFilter.allCases) { filter in
+                    FilterChipButton(
+                        title: filter.title,
+                        count: requestCount(for: filter),
+                        isSelected: selectedFilter == filter,
+                        action: { selectedFilter = filter }
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
     }
 
@@ -293,6 +320,28 @@ private struct FeatureRequestMessage: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct FilterChipButton: View {
+    let title: String
+    let count: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("\(title) (\(count))")
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .background(
+                    isSelected ? Color.accentColor : Color.secondary.opacity(0.12),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 

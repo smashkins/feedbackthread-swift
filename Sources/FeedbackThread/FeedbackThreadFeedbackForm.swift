@@ -144,7 +144,7 @@ public struct FeedbackThreadFeedbackForm: View {
                 kind: kind,
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 text: message.trimmingCharacters(in: .whitespacesAndNewlines),
-                appVersion: appVersion,
+                appVersion: appVersion ?? FeedbackThreadAppVersion.current,
                 externalUserID: resolvedUserID,
                 customerTier: customerTierProvider?()
             )

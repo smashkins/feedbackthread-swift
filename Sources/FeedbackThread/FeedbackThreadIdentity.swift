@@ -1,5 +1,22 @@
 import Foundation
 
+/// The host app's marketing version and build number, read from the main
+/// bundle — the value the drop-in feedback form attaches to submissions by
+/// default so integrators never have to plumb it through themselves.
+public enum FeedbackThreadAppVersion {
+    /// e.g. `"2.4.1 (317)"`, or `"unknown"` outside a normal app bundle.
+    public static var current: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String
+        let build = info?["CFBundleVersion"] as? String
+        switch (version, build) {
+        case (let v?, let b?): return "\(v) (\(b))"
+        case (let v?, nil): return v
+        default: return "unknown"
+        }
+    }
+}
+
 /// Resolves the stable identity used to tie a submission, vote, or "My
 /// requests" lookup to a single person: a developer-supplied external user
 /// ID when present, otherwise the SDK's own on-device anonymous ID —

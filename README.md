@@ -27,7 +27,7 @@ In Xcode: **File → Add Package Dependencies…** and enter
 https://github.com/aivars/feedbackthread-swift.git
 ```
 
-Choose **Up to Next Major Version** from `0.3.2` and add the `FeedbackThread` product.
+Choose **Up to Next Major Version** from `0.3.3` and add the `FeedbackThread` product.
 
 ## Quick start
 
@@ -36,13 +36,7 @@ Grab your project key from the dashboard (**SDK setup**). It's a public, low-pri
 ```swift
 import FeedbackThread
 
-let feedbackThread = FeedbackThreadClient(
-    configuration: try FeedbackThreadConfiguration(
-        baseURL: URL(string: "https://api.feedbackthread.com")!,
-        projectKey: "<your-project-key>",
-        source: "ios"
-    )
-)
+let feedbackThread = FeedbackThreadClient(projectKey: "<your-project-key>")
 ```
 
 ### Show the feature-request board
@@ -51,7 +45,6 @@ let feedbackThread = FeedbackThreadClient(
 .sheet(isPresented: $showRequests) {
     FeedbackThreadFeatureRequestList(
         client: feedbackThread,
-        appVersion: (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown",
         externalUserID: signedInUserID   // optional; anonymous ID used otherwise
     )
 }
@@ -65,7 +58,6 @@ Users see approved requests, filter by status (In review · Planned · In progre
 .sheet(isPresented: $showFeedback) {
     FeedbackThreadFeedbackForm(
         client: feedbackThread,
-        appVersion: (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
     )
 }
 ```

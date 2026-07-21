@@ -157,13 +157,27 @@ public struct FeedbackThreadConfiguration: Equatable, Sendable {
     public var source: String
     public var requestTimeout: TimeInterval
 
+    /// The hosted FeedbackThread API. Every configuration defaults to it;
+    /// pass a custom `baseURL` only for local development.
+    public static let defaultBaseURL = URL(string: "https://api.feedbackthread.com")!
+
+    /// The platform this SDK build reports as the feedback source. Detected
+    /// at compile time so integrators never have to declare it.
+    public static var defaultSource: String {
+        #if os(watchOS)
+        "watchos"
+        #else
+        "ios"
+        #endif
+    }
+
     /// Hosts that are trusted to be reached over plain HTTP (local development only).
     private static let loopbackHosts: Set<String> = ["localhost", "127.0.0.1", "::1"]
 
     public init(
-        baseURL: URL,
+        baseURL: URL = FeedbackThreadConfiguration.defaultBaseURL,
         projectKey: String,
-        source: String,
+        source: String = FeedbackThreadConfiguration.defaultSource,
         requestTimeout: TimeInterval = 30
     ) throws {
         guard let scheme = baseURL.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
@@ -223,6 +237,23 @@ public struct FeedbackThreadClient: Sendable {
     private let myRequestsHandler: MyRequestsHandler
     private let myUpdatesHandler: MyUpdatesHandler
     private let acknowledgeUpdatesHandler: AcknowledgeUpdatesHandler
+
+    /// The one-line integration: everything except the project key has a
+    /// sensible default (hosted API URL, compile-time platform source,
+    /// current bundle's app version at submit time).
+    ///
+    ///     let feedbackThread = FeedbackThreadClient(projectKey: "ft_pk_…")
+    ///
+    /// Use `init(configuration:)` when you need a custom base URL or
+    /// timeout. Non-throwing because the default configuration is
+    /// statically valid — configuration errors can only come from custom
+    /// values, which this initializer doesn't accept.
+    public init(projectKey: String) {
+        // Safe by construction: defaultBaseURL is https, and the throwing
+        // paths in FeedbackThreadConfiguration.init only reject bad URLs.
+        let configuration = try! FeedbackThreadConfiguration(projectKey: projectKey)
+        self.init(configuration: configuration)
+    }
 
     public init(
         configuration: FeedbackThreadConfiguration,

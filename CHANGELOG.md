@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3
+
+One-line integration.
+
+- `FeedbackThreadClient(projectKey:)` — non-throwing convenience initializer; the hosted API URL and platform source are now defaults on `FeedbackThreadConfiguration` (source auto-detects watchOS/iOS at compile time).
+- The drop-in feedback form attaches the host app's version automatically (`CFBundleShortVersionString (CFBundleVersion)`); pass `appVersion` only to override. `FeedbackThreadAppVersion.current` is public for custom UI.
+
+
 ## 0.3.2
 
 - One shared identity everywhere: the standalone feedback form now submits with the same persisted anonymous voter ID the board and My Requests use, so anonymous submissions appear in My Requests and receive shipped updates. `FeedbackThreadIdentity.resolve(externalUserID:)` is public so host apps can badge with `myUpdates` at launch — signed-in or not.

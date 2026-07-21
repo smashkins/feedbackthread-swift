@@ -37,3 +37,24 @@ struct FeedbackThreadIdentityTests {
         #expect(third == first)
     }
 }
+
+@Suite("FeedbackThreadConfiguration defaults")
+struct FeedbackThreadConfigurationDefaultTests {
+    @Test("defaults point at the hosted API with a platform source")
+    func defaults() throws {
+        let configuration = try FeedbackThreadConfiguration(projectKey: "ft_pk_test")
+        #expect(configuration.baseURL.absoluteString == "https://api.feedbackthread.com")
+        #expect(configuration.source == "ios")
+        #expect(configuration.projectKey == "ft_pk_test")
+    }
+
+    @Test("one-line client initializer builds a working client")
+    func oneLineClient() {
+        _ = FeedbackThreadClient(projectKey: "ft_pk_test")
+    }
+
+    @Test("app version helper never returns an empty string")
+    func appVersion() {
+        #expect(!FeedbackThreadAppVersion.current.isEmpty)
+    }
+}

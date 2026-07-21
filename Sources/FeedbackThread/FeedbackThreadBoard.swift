@@ -5,7 +5,7 @@ private enum FeatureRequestRoute: Hashable {
     case detail(String)
 }
 
-public struct FeedbackThreadFeatureRequestList: View {
+public struct FeedbackThreadBoard: View {
     private enum LoadState: Equatable {
         case loading
         case loaded
@@ -578,9 +578,9 @@ private struct FeatureRequestVoteButton: View {
     }
 }
 
-private struct FeedbackThreadFeatureRequestListPreviews: PreviewProvider {
+private struct FeedbackThreadBoardPreviews: PreviewProvider {
     static var previews: some View {
-        FeedbackThreadFeatureRequestList(
+        FeedbackThreadBoard(
             client: FeedbackThreadClient(
                 submit: { submission, _ in
                     FeedbackThreadFeedback(

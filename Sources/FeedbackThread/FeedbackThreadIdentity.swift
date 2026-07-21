@@ -31,7 +31,7 @@ public enum FeedbackThreadAppVersion {
 /// reactivity (`@AppStorage`), never re-implement the fallback logic.
 public enum FeedbackThreadIdentity {
     /// The UserDefaults key used to persist the generated anonymous ID.
-    /// This is the exact key `FeedbackThreadFeatureRequestList` and
+    /// This is the exact key `FeedbackThreadBoard` and
     /// `FeedbackThreadMyRequestsList` read via `@AppStorage`, so all three
     /// surfaces stay in sync.
     static let voterIDDefaultsKey = "com.feedbackthread.sdk.voter-id"

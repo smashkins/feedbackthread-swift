@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+**Breaking**: `FeedbackThreadFeatureRequestList` is now `FeedbackThreadBoard` — the name finally matches what it is: the complete drop-in surface (vote-sorted requests and bugs, Suggest-a-feature submission, My Requests with unread badge). No deprecation alias; update call sites with a find-and-replace. The standalone form and My Requests views are unchanged and documented under Advanced for contextual placements.
+
+
 ## 0.3.8
 
 - Fixes the remaining 0.3.6-era compile break (vote-update path missing the `kind` argument) — and the subtler runtime cousin: on toolchains that tolerated it, voting reconstructed the request without its kind, silently dropping the Bug tag. `FeedbackThreadFeatureRequest` now has an explicit public initializer with `kind` defaulting to nil (immune to memberwise-synthesis differences between Swift toolchains) and a `updatingVote(voted:votes:)` helper that preserves every field, pinned by tests.

@@ -2,7 +2,7 @@
 import SwiftUI
 
 /// A drop-in "My requests" surface: closes the loop for the end user who
-/// submitted feedback through the SDK. Unlike ``FeedbackThreadFeatureRequestList``
+/// submitted feedback through the SDK. Unlike ``FeedbackThreadBoard``
 /// (the public board), this always shows the caller's own cards, including
 /// ones still waiting for review that never appear anywhere public.
 public struct FeedbackThreadMyRequestsList: View {

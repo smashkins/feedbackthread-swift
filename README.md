@@ -27,7 +27,7 @@ In Xcode: **File → Add Package Dependencies…** and enter
 https://github.com/aivars/feedbackthread-swift.git
 ```
 
-Choose **Up to Next Major Version** from `0.3.8` and add the `FeedbackThread` product.
+Choose **Up to Next Major Version** from `0.4.0` and add the `FeedbackThread` product.
 
 ## Quick start
 
@@ -39,30 +39,18 @@ import FeedbackThread
 let feedbackThread = FeedbackThreadClient(projectKey: "<your-project-key>")
 ```
 
-### Show the feature-request board
+Present `FeedbackThreadBoard` and you're done — it's the complete integration:
 
 ```swift
-.sheet(isPresented: $showRequests) {
-    FeedbackThreadFeatureRequestList(
+.sheet(isPresented: $showFeedbackThread) {
+    FeedbackThreadBoard(
         client: feedbackThread,
         externalUserID: signedInUserID   // optional; anonymous ID used otherwise
     )
 }
 ```
 
-Users see approved requests, filter by status (In review · Planned · In progress · Completed), vote with a single tap, and get a **Shipped in x.y.z** badge on anything you've released.
-
-### Show the feedback form
-
-```swift
-.sheet(isPresented: $showFeedback) {
-    FeedbackThreadFeedbackForm(
-        client: feedbackThread,
-    )
-}
-```
-
-Every submission carries an idempotency key, so a retried request never creates a duplicate.
+One view gives users a vote-sorted board of requests and bugs with status filters (In review · Planned · In progress · Completed) and **Shipped in x.y.z** badges, a **Suggest a feature** button that opens the submission form, and a **My requests** tab with an unread badge that closes the loop on their own cards — all built in.
 
 ### Tell FeedbackThread who pays
 
@@ -80,6 +68,22 @@ try await feedbackThread.submit(
 ```
 
 `customerTier` is `.free`, `.paying`, or `.custom("family")` — and omitted entirely when you don't pass it.
+
+## Advanced: standalone surfaces
+
+`FeedbackThreadBoard` is a complete integration on its own, but its pieces are also available individually for contextual placements — e.g. a "Report a bug" row in your settings screen that jumps straight to the form instead of the full board. Each surface below is fully supported as a standalone view.
+
+### Show the feedback form
+
+```swift
+.sheet(isPresented: $showFeedback) {
+    FeedbackThreadFeedbackForm(
+        client: feedbackThread,
+    )
+}
+```
+
+Every submission carries an idempotency key, so a retried request never creates a duplicate.
 
 ### Show users their own requests
 

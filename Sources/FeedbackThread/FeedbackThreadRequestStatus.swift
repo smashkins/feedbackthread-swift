@@ -13,7 +13,38 @@ enum FeedbackThreadRequestStage: Equatable, Sendable {
     case planned
     case inProgress
     case completed
+    /// Declined during moderation - only ever seen by the reporter, same as
+    /// ``pendingReview``.
+    case rejected
     case unknown(String)
+}
+
+/// Which section of the "My requests" list a status belongs in. A pure,
+/// exhaustive mapping - kept outside the `#if os(iOS)`-gated view files so
+/// it's directly testable, and so every stage (including ones the SDK
+/// doesn't recognize yet) is guaranteed to land in exactly one section
+/// rather than being silently dropped.
+enum FeedbackThreadMyRequestsSection: Equatable, Sendable {
+    case waitingForReview
+    case inProgress
+    case shipped
+    case closed
+}
+
+extension FeedbackThreadRequestStage {
+    /// Buckets this stage into its "My requests" section. Unknown stages
+    /// fold into ``FeedbackThreadMyRequestsSection/inProgress`` (their raw
+    /// status label still renders via ``String/feedbackThreadRequestLabel``)
+    /// so a status the SDK doesn't recognize yet doesn't produce a card that
+    /// fits no section and effectively vanishes from the list.
+    var feedbackThreadMyRequestsSection: FeedbackThreadMyRequestsSection {
+        switch self {
+        case .pendingReview: .waitingForReview
+        case .inReview, .planned, .inProgress, .unknown: .inProgress
+        case .completed: .shipped
+        case .rejected: .closed
+        }
+    }
 }
 
 extension String {
@@ -25,6 +56,7 @@ extension String {
         case "Planned": .planned
         case "In progress", "Ready to release": .inProgress
         case "Released": .completed
+        case "Rejected": .rejected
         default: .unknown(self)
         }
     }
@@ -38,6 +70,7 @@ extension String {
         case .planned: "Planned"
         case .inProgress: "In progress"
         case .completed: "Completed"
+        case .rejected: "Rejected"
         case .unknown: sensiblyCapitalized
         }
     }

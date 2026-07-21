@@ -13,10 +13,16 @@ struct FeedbackThreadRequestStatusTests {
             ("In progress", .inProgress),
             ("Ready to release", .inProgress),
             ("Released", .completed),
+            ("Rejected", .rejected),
         ]
     )
     func mapsKnownStatuses(status: String, stage: FeedbackThreadRequestStage) {
         #expect(status.feedbackThreadRequestStage == stage)
+    }
+
+    @Test("Labels a Rejected status plainly")
+    func labelsRejected() {
+        #expect("Rejected".feedbackThreadRequestLabel == "Rejected")
     }
 
     @Test("Labels a Submitted status honestly, without implying moderation happened")
@@ -35,5 +41,21 @@ struct FeedbackThreadRequestStatusTests {
     func capitalizesUnknownStatusWithSeparators() {
         #expect("on_hold".feedbackThreadRequestLabel == "On Hold")
         #expect("NEEDS-TRIAGE".feedbackThreadRequestLabel == "Needs Triage")
+    }
+
+    @Test(
+        "Buckets every possible stage into exactly one My Requests section",
+        arguments: [
+            (FeedbackThreadRequestStage.pendingReview, FeedbackThreadMyRequestsSection.waitingForReview),
+            (.inReview, .inProgress),
+            (.planned, .inProgress),
+            (.inProgress, .inProgress),
+            (.completed, .shipped),
+            (.rejected, .closed),
+            (.unknown("archived"), .inProgress),
+        ]
+    )
+    func bucketsEveryStage(stage: FeedbackThreadRequestStage, section: FeedbackThreadMyRequestsSection) {
+        #expect(stage.feedbackThreadMyRequestsSection == section)
     }
 }

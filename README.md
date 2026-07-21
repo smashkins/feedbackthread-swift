@@ -27,7 +27,7 @@ In Xcode: **File → Add Package Dependencies…** and enter
 https://github.com/aivars/feedbackthread-swift.git
 ```
 
-Choose **Up to Next Major Version** from `0.3.0` and add the `FeedbackThread` product.
+Choose **Up to Next Major Version** from `0.3.2` and add the `FeedbackThread` product.
 
 ## Quick start
 
@@ -88,6 +88,40 @@ try await feedbackThread.submit(
 ```
 
 `customerTier` is `.free`, `.paying`, or `.custom("family")` — and omitted entirely when you don't pass it.
+
+### Show users their own requests
+
+The board only ever shows moderated, public cards. `FeedbackThreadMyRequestsList` closes the loop for the person who submitted: it always shows their own cards, including ones still waiting for review that never appear anywhere public.
+
+```swift
+.sheet(isPresented: $showMyRequests) {
+    FeedbackThreadMyRequestsList(
+        client: feedbackThread,
+        externalUserID: signedInUserID,   // optional; anonymous ID used otherwise
+        onDismiss: { showMyRequests = false },
+        onUnreadCountChange: { unreadCount in
+            // badge your own UI, e.g. a tab item
+        }
+    )
+}
+```
+
+It groups cards into **Waiting for review**, **In progress**, and **Shipped**, and auto-acknowledges shipped cards as soon as they're viewed.
+
+`onUnreadCountChange` only fires once the list is opened — too late for a badge that should already be showing at launch. Call `myUpdates(externalUserID:)` yourself on app start or foreground to get `unreadCount` ahead of time:
+
+```swift
+.task {
+    // Works for anonymous users too: resolve() returns the SDK's
+    // persisted on-device ID when you don't pass your own.
+    let userID = FeedbackThreadIdentity.resolve(externalUserID: signedInUserID)
+    if let result = try? await feedbackThread.myUpdates(externalUserID: userID) {
+        badgeCount = result.unreadCount
+    }
+}
+```
+
+The client exposes all three calls directly if you're building custom UI: `myRequests(externalUserID:)`, `myUpdates(externalUserID:)`, and `acknowledgeUpdates(ids:externalUserID:)`.
 
 ### Use the client directly
 

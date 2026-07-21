@@ -211,7 +211,10 @@ public struct FeedbackThreadFeatureRequestList: View {
 
     private func ensureVoterID() {
         guard voterID.isEmpty else { return }
-        storedVoterID = UUID().uuidString
+        // Delegates generation to the shared resolver so this is the only
+        // place a fallback ID gets minted - the standalone feedback form and
+        // My Requests resolve through the same helper.
+        storedVoterID = FeedbackThreadIdentity.resolve(externalUserID: nil)
     }
 
     @MainActor
@@ -413,6 +416,7 @@ private struct FeatureRequestStatusBadge: View {
         case .planned: .purple
         case .inProgress: .blue
         case .completed: .green
+        case .rejected: .red
         case .unknown: .secondary
         }
     }

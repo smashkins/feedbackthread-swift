@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+- One shared identity everywhere: the standalone feedback form now submits with the same persisted anonymous voter ID the board and My Requests use, so anonymous submissions appear in My Requests and receive shipped updates. `FeedbackThreadIdentity.resolve(externalUserID:)` is public so host apps can badge with `myUpdates` at launch — signed-in or not.
+- My Requests adds a "Closed" section for rejected items and folds unknown statuses into "In progress" — no more silently blank screens.
+- Switching the feedback type resets the retry idempotency key, like editing the text already did.
+
+
 ## 0.3.1
 
 - `FeedbackThreadMyRequestsList` no longer requires `externalUserID`: when omitted it reuses the SDK's persisted anonymous voter ID (the same one the request board generates), so anonymous users — the default — can see their own requests. This matches the Android behavior.

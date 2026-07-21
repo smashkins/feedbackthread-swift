@@ -1,6 +1,11 @@
 #if os(iOS) && canImport(SwiftUI)
 import SwiftUI
 
+/// A standalone "send feedback" form: usable on its own (e.g. from a Settings
+/// screen) without the request board around it. Submissions are tied to the
+/// same on-device anonymous ID the board and My Requests use, unless an
+/// external ID is supplied - so a submission made from here still shows up
+/// in "My requests" and can receive shipped updates.
 public struct FeedbackThreadFeedbackForm: View {
     private enum SubmissionPhase: Equatable {
         case editing
@@ -54,6 +59,7 @@ public struct FeedbackThreadFeedbackForm: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .onChange(of: kind) { _ in resubmissionKey.contentChanged() }
 
                     TextField("Short title", text: $title)
                         .textInputAutocapitalization(.sentences)
@@ -127,6 +133,10 @@ public struct FeedbackThreadFeedbackForm: View {
         // Reused across retries of the same content so a network failure followed
         // by tapping Send again can't create a duplicate submission server-side.
         let idempotencyKey = resubmissionKey.beginAttempt()
+        // Always resolves to a non-empty identity - the provided external ID,
+        // or the same persisted anonymous ID the board and My Requests use -
+        // so this submission is never orphaned from "My requests".
+        let resolvedUserID = FeedbackThreadIdentity.resolve(externalUserID: externalUserID)
         pendingSubmission = PendingSubmission(
             id: UUID().uuidString,
             idempotencyKey: idempotencyKey,
@@ -135,7 +145,7 @@ public struct FeedbackThreadFeedbackForm: View {
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 text: message.trimmingCharacters(in: .whitespacesAndNewlines),
                 appVersion: appVersion,
-                externalUserID: externalUserID,
+                externalUserID: resolvedUserID,
                 customerTier: customerTierProvider?()
             )
         )

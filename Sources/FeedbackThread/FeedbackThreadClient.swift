@@ -8,6 +8,11 @@ public enum FeedbackThreadFeedbackKind: String, Codable, CaseIterable, Identifia
     case bug = "Bugs"
     case review = "Reviews"
 
+    /// The kinds an end user can pick in the drop-in feedback form. `review`
+    /// is deliberately absent: review-kind cards come from App Store /
+    /// Google Play ingestion, not from in-app submission.
+    public static let submittableCases: [FeedbackThreadFeedbackKind] = [.request, .bug]
+
     public var id: Self { self }
 
     public var title: String {

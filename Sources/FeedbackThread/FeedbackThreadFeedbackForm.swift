@@ -54,7 +54,7 @@ public struct FeedbackThreadFeedbackForm: View {
             Form {
                 Section {
                     Picker("Feedback type", selection: $kind) {
-                        ForEach(FeedbackThreadFeedbackKind.allCases) { option in
+                        ForEach(FeedbackThreadFeedbackKind.submittableCases) { option in
                             Text(option.title).tag(option)
                         }
                     }

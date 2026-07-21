@@ -115,6 +115,9 @@ public enum FeedbackThreadRequestTarget: String, Codable, Sendable {
 public struct FeedbackThreadFeatureRequest: Decodable, Equatable, Identifiable, Sendable {
     public let id: String
     public let title: String
+    /// "Requests" or "Bugs" - accepted public bugs share the board process.
+    /// Optional so the SDK tolerates older servers that omit it.
+    public let kind: FeedbackThreadFeedbackKind?
     public let description: String
     public let votes: Int
     public let target: FeedbackThreadRequestTarget

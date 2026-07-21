@@ -14,6 +14,7 @@ public struct FeedbackThreadFeatureRequestList: View {
 
     private enum ActiveSheet: String, Identifiable {
         case submit
+        case myRequests
 
         var id: String { rawValue }
     }
@@ -63,6 +64,8 @@ public struct FeedbackThreadFeatureRequestList: View {
     @State private var activeSheet: ActiveSheet?
     @State private var selectedFilter: RequestFilter = .all
     @State private var voteErrorMessage: String?
+    @State private var unreadCount = 0
+    @State private var presentedMyRequestsSheet = false
 
     public init(
         client: FeedbackThreadClient,
@@ -93,6 +96,15 @@ public struct FeedbackThreadFeatureRequestList: View {
                         Button("Done", action: onDismiss)
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        presentedMyRequestsSheet = true
+                        activeSheet = .myRequests
+                    } label: {
+                        myRequestsToolbarIcon
+                    }
+                    .accessibilityLabel("My requests")
+                }
             }
             .safeAreaInset(edge: .bottom) {
                 addRequestButton
@@ -102,17 +114,50 @@ public struct FeedbackThreadFeatureRequestList: View {
             ensureVoterID()
             await load()
         }
-        .sheet(item: $activeSheet) { _ in
-            FeedbackThreadFeedbackForm(
-                client: client,
-                appVersion: appVersion,
-                externalUserID: voterID,
-                customerTierProvider: customerTierProvider,
-                onSubmitted: { _ in
-                    Task { await load() }
-                }
-            )
+        .sheet(item: $activeSheet, onDismiss: handleSheetDismiss) { sheet in
+            switch sheet {
+            case .submit:
+                FeedbackThreadFeedbackForm(
+                    client: client,
+                    appVersion: appVersion,
+                    externalUserID: voterID,
+                    customerTierProvider: customerTierProvider,
+                    onSubmitted: { _ in
+                        Task { await load() }
+                    }
+                )
+            case .myRequests:
+                FeedbackThreadMyRequestsList(
+                    client: client,
+                    externalUserID: externalUserID,
+                    onDismiss: { activeSheet = nil },
+                    onUnreadCountChange: { unreadCount = $0 }
+                )
+            }
         }
+    }
+
+    // iOS16-compatible badge: `.badge()` on toolbar items is iOS17+, so this
+    // overlays a small Circle+Text directly on the icon instead.
+    private var myRequestsToolbarIcon: some View {
+        Image(systemName: "person.crop.circle")
+            .overlay(alignment: .topTrailing) {
+                if unreadCount > 0 {
+                    Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(3)
+                        .background(Circle().fill(Color.red))
+                        .frame(minWidth: 14, minHeight: 14)
+                        .offset(x: 9, y: -9)
+                }
+            }
+    }
+
+    private func handleSheetDismiss() {
+        guard presentedMyRequestsSheet else { return }
+        presentedMyRequestsSheet = false
+        Task { await refreshUnreadCount() }
     }
 
     // Pinned in the thumb zone rather than tucked into the top-trailing
@@ -247,6 +292,9 @@ public struct FeedbackThreadFeatureRequestList: View {
     @MainActor
     private func load() async {
         if requests.isEmpty { loadState = .loading }
+        // Fired alongside the request fetch rather than after it, so opening
+        // the board doesn't delay the badge any longer than it has to.
+        async let unreadCountTask: Void = refreshUnreadCount()
         do {
             let loaded = try await client.requests(externalUserID: voterID)
             guard !Task.isCancelled else { return }
@@ -257,6 +305,15 @@ public struct FeedbackThreadFeatureRequestList: View {
         } catch {
             loadState = .failed(error.localizedDescription)
         }
+        await unreadCountTask
+    }
+
+    // Best-effort: badging the toolbar icon is a nicety, not something that
+    // should ever surface an error or block the board from loading.
+    @MainActor
+    private func refreshUnreadCount() async {
+        guard let result = try? await client.myUpdates(externalUserID: voterID) else { return }
+        unreadCount = result.unreadCount
     }
 
     private func toggleVote(_ request: FeedbackThreadFeatureRequest) {
@@ -375,6 +432,14 @@ private struct FeatureRequestRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
                     HStack(spacing: 6) {
+                        if request.kind == .bug {
+                            Text("Bug")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color.red.opacity(0.12), in: Capsule())
+                                .foregroundStyle(.red)
+                        }
                         FeatureRequestStatusBadge(status: request.status)
                         if let shippedInVersion = request.shippedInVersion {
                             ShippedInVersionBadge(version: shippedInVersion)

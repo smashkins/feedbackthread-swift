@@ -18,16 +18,7 @@ Native in-app feedback for iOS: a drop-in feature-request board with voting, a f
 
 `FeedbackThreadBoard` follows the system appearance out of the box:
 
-<p>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/board-dark.png">
-    <img src="docs/board-light.png" alt="FeedbackThreadBoard on iOS — vote-sorted feature requests with status filters and Shipped badges" width="320">
-  </picture>
-  <picture>
-    <source media="(prefers-color-scheme: light)" srcset="docs/board-light.png">
-    <img src="docs/board-dark.png" alt="FeedbackThreadBoard on iOS in the opposite appearance" width="320">
-  </picture>
-</p>
+<img src="docs/board-themes.png" alt="FeedbackThreadBoard on iOS in light and dark mode - vote-sorted feature requests with status filters and Shipped badges" width="760">
 
 ## Requirements
 

@@ -14,6 +14,21 @@ Native in-app feedback for iOS: a drop-in feature-request board with voting, a f
 - 🔒 **Privacy-first** — no email or name is required; you control whether to pass an external user identifier; anonymous voter IDs stay on-device
 - 🪶 **Zero dependencies** — a small async/await client over `URLSession`, SwiftUI views, nothing else
 
+## What your users see
+
+`FeedbackThreadBoard` follows the system appearance out of the box:
+
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/board-dark.png">
+    <img src="docs/board-light.png" alt="FeedbackThreadBoard on iOS — vote-sorted feature requests with status filters and Shipped badges" width="320">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/board-light.png">
+    <img src="docs/board-dark.png" alt="FeedbackThreadBoard on iOS in the opposite appearance" width="320">
+  </picture>
+</p>
+
 ## Requirements
 
 - iOS 16+ (SwiftUI views) · macOS 13+ (client only)

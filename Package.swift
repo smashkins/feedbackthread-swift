@@ -19,7 +19,10 @@ let package = Package(
     targets: [
         .target(
             name: "FeedbackThread",
-            path: "Sources/FeedbackThread"
+            path: "Sources/FeedbackThread",
+            resources: [
+                .process("Resources"),
+            ]
         ),
         .testTarget(
             name: "FeedbackThreadTests",

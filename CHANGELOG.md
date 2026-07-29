@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Bundles a privacy manifest that declares the SDK's app-local `UserDefaults`
+  access for its anonymous voter identity.
+
 ## 0.4.0
 
 **Breaking**: `FeedbackThreadFeatureRequestList` is now `FeedbackThreadBoard` — the name finally matches what it is: the complete drop-in surface (vote-sorted requests and bugs, Suggest-a-feature submission, My Requests with unread badge). No deprecation alias; update call sites with a find-and-replace. The standalone form and My Requests views are unchanged and documented under Advanced for contextual placements.

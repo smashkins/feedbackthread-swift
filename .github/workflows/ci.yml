@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Every run is a fresh checkout, so the clean-build requirement that used to be
+# enforced by hand at release time is now satisfied automatically on every pull
+# request — including ones from outside contributors.
+jobs:
+  test:
+    name: Tests and iOS build
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Swift version
+        run: swift --version
+
+      # Runs on macOS, which compiles none of the #if os(iOS) view code.
+      - name: Unit tests
+        run: swift test
+
+      # The pass that actually compiles the SwiftUI views. A broken preview
+      # fixture once shipped because only the macOS test run was gating it.
+      - name: iOS simulator build
+        run: |
+          SDKPATH=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          swift build \
+            -Xswiftc -sdk -Xswiftc "$SDKPATH" \
+            -Xswiftc -target -Xswiftc arm64-apple-ios16.0-simulator

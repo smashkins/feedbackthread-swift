@@ -133,6 +133,17 @@ The SwiftUI views are optional. `FeedbackThreadClient` exposes `submit(_:)`, `re
 
 The SDK is the in-app half of FeedbackThread: feedback lands in a keyboard-driven triage inbox, becomes cards on your roadmap, ships in tracked releases — and your AI agent can work the whole backlog over [MCP](https://feedbackthread.com). Learn more at [feedbackthread.com](https://feedbackthread.com).
 
+## Contributing
+
+This repository is where the Swift SDK is developed, and pull requests are
+merged here. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to run the tests
+(including the iOS simulator build that `swift test` does not cover) and for the
+one invariant worth knowing before you touch status handling.
+
+**Adding a language** is the easiest contribution: every user-facing string
+lives in `Sources/FeedbackThread/Resources/Localizable.xcstrings`, and adding a
+locale needs no Swift changes at all.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
